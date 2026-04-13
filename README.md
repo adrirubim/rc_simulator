@@ -7,7 +7,7 @@
 > Desktop UI (Qt / PySide6) to control an RC car (MOZA + UDP + video). Goal: an operational Linux frontend, usable on Windows via WSLg.
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![Framework](https://img.shields.io/badge/Framework-N%2FA-lightgrey?style=flat)](#overview)
+[![Framework](https://img.shields.io/badge/Framework-N%2FA-lightgrey?style=flat)](REPO_STANDARD.md)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11+-41CD52?style=flat)](https://doc.qt.io/qtforpython/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/adrirubim/rc_simulator/tests.yml?branch=main&label=Tests&style=flat&color=brightgreen)](https://github.com/adrirubim/rc_simulator/actions/workflows/tests.yml)
 [![Lint](https://img.shields.io/github/actions/workflow/status/adrirubim/rc_simulator/lint.yml?branch=main&label=Lint&style=flat&color=blue)](https://github.com/adrirubim/rc_simulator/actions/workflows/lint.yml)
@@ -176,15 +176,15 @@ python -m rc_simulator
 <a id="documentation"></a>
 ## 📚 Documentation
 
-Index: `docs/README.md`.
+Index: [docs/README.md](docs/README.md).
 
 | Section | Links |
 |---------|-------|
-| **Technical** | `TECHNICAL_GUIDE.md` · `VERSION_STACK.md` |
-| **Development** | `docs/DEVELOPMENT.md` · `docs/TROUBLESHOOTING.md` |
-| **Architecture** | `docs/ARCHITECTURE.md` |
-| **Operations** | `ops/README.md` |
-| **Policy** | `CONTRIBUTING.md` · `SECURITY.md` · `SUPPORT.md` · `REPO_STANDARD.md` · `CODE_OF_CONDUCT.md` · `CHANGELOG.md` |
+| **Technical** | [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md) · [VERSION_STACK.md](VERSION_STACK.md) |
+| **Development** | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) · [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| **Architecture** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| **Operations** | [ops/README.md](ops/README.md) |
+| **Policy** | [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) · [REPO_STANDARD.md](REPO_STANDARD.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 
@@ -210,13 +210,28 @@ Local equivalent (CI parity):
 <a id="testing"></a>
 ## 🧪 Testing
 
+Minimal:
+
 ```bash
 pytest
 ```
 
 Notes:
 
-- CI-parity local gate: `./scripts/dev-verify.sh`
+- CI-parity local gate (recommended):
+
+```bash
+./scripts/dev-verify.sh
+```
+
+- CI (GitHub Actions) equivalent:
+
+```bash
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+PYTHONPATH=src pytest -q
+```
+
 - If you didn't install the package into the venv, use `PYTHONPATH=src`:
 
 ```bash
@@ -228,14 +243,24 @@ PYTHONPATH=src pytest
 <a id="architecture"></a>
 ## 🏗 Architecture
 
-See `docs/ARCHITECTURE.md`.
+RC Simulator follows a modular architecture with a clear separation of concerns across UI, app coordination, core types/config, and service logic.
+
+**High-level flow:**
+
+```text
+Bootstrap → Qt UI (PySide6) → Discovery | Control Session | Video (optional)
+                          ↓
+             core/config/state/events + adapters/ports/services
+```
+
+For a more detailed module map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
 <a id="optional-tooling"></a>
 ## 🧩 Optional Tooling
 
-N/A. This repository does not ship optional tooling beyond `scripts/` and `ops/`.
+N/A. This repository does not ship optional tooling beyond `scripts/` and `ops/` directories.
 
 ---
 
