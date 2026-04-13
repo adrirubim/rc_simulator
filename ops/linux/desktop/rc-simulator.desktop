@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=RC Simulator
+Comment=RC Simulator (Qt / PySide6)
+Exec=rc-simulator
+Icon=rc-simulator
+Terminal=false
+Categories=Development;Robotics;Simulation;
+StartupNotify=true
+

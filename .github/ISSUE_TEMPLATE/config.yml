@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support / Questions
+    url: https://github.com/adrirubim/rc_simulator/blob/main/SUPPORT.md
+    about: See SUPPORT.md for help and what to include.
+

@@ -1,0 +1,19 @@
+[Unit]
+Description=MOZA UDP Client
+After=graphical.target network.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=simulatore
+WorkingDirectory=/home/simulatore
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/simulatore/.Xauthority
+Environment=QT_X11_NO_MITSHM=1
+ExecStart=/usr/bin/python3 /home/simulatore/moza_udp_client.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+
