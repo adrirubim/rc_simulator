@@ -7,6 +7,7 @@
 > Desktop UI (Qt / PySide6) to control an RC car (MOZA + UDP + video). Goal: an operational Linux frontend, usable on Windows via WSLg.
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/Framework-N%2FA-lightgrey?style=flat)](#overview)
 [![PySide6](https://img.shields.io/badge/PySide6-6.11+-41CD52?style=flat)](https://doc.qt.io/qtforpython/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/adrirubim/rc_simulator/tests.yml?branch=main&label=Tests&style=flat&color=brightgreen)](https://github.com/adrirubim/rc_simulator/actions/workflows/tests.yml)
 [![Lint](https://img.shields.io/github/actions/workflow/status/adrirubim/rc_simulator/lint.yml?branch=main&label=Lint&style=flat&color=blue)](https://github.com/adrirubim/rc_simulator/actions/workflows/lint.yml)
@@ -25,6 +26,7 @@
 - [CI/CD](#cicd)
 - [Testing](#testing)
 - [Architecture](#architecture)
+- [Optional Tooling](#optional-tooling)
 - [Project Status](#project-status)
 - [Default Users](#default-users-development)
 - [Useful Commands](#useful-commands)
@@ -40,10 +42,11 @@
 
 Use these commands from the **repository root** as your main entrypoints:
 
-| Command | Purpose |
-|--------|---------|
-| `./scripts/dev-verify.sh` | CI-parity local gate: venv + deps + audit + ruff + pytest |
-| `python -m rc_simulator` | Start the app |
+| Command | Purpose | Notes |
+|--------|---------|-------|
+| `./scripts/dev-verify.sh` | **Full validation** (CI parity) | Creates venv if missing, installs deps, runs audit + ruff + pytest |
+| `python -m rc_simulator` | **Run the app** | Requires a GUI-capable environment (Linux desktop or WSLg) |
+| `ops/linux/install_launcher.sh` | **Install desktop launcher** | Linux only (writes a `.desktop` entry) |
 
 ---
 
@@ -56,6 +59,12 @@ RC Simulator is a Qt UI that coordinates:
 - Control (MOZA/evdev → UDP)
 - Optional video (GStreamer), depending on environment
 
+### Key Highlights
+
+- **Single official entrypoint:** `python -m rc_simulator`
+- **CI-parity gate:** `./scripts/dev-verify.sh`
+- **OS integration:** systemd + desktop launcher (Linux) and shortcut installer (Windows via WSL)
+
 ### Runtime notes
 
 - **Linux** is the original target.
@@ -66,11 +75,24 @@ RC Simulator is a Qt UI that coordinates:
 <a id="features"></a>
 ## ✨ Features
 
-- ✅ Qt UI (PySide6) with clear operational states
+### 🔐 Security & Stability
+
+- ✅ Repo hygiene guardrails (no build artifacts tracked; CI gate via `./scripts/dev-verify.sh`)
+- ✅ Conservative defaults (env-driven config via `RC_UI_*`)
+
+### ⚙️ Control & Connectivity
+
 - ✅ Discovery and control services (`src/rc_simulator/services/`)
-- ✅ GStreamer video helper (`ops/linux/camera_receive.sh`)
+- ✅ MOZA input support via `evdev` (Linux only; environment-dependent)
+
+### 🎥 Video & UI
+
+- ✅ Qt UI (PySide6) with clear operational states
+- ✅ GStreamer helper (`ops/linux/camera_receive.sh`) for UDP H264 receive
+
+### 🧰 Operations
+
 - ✅ OS integration scripts (Linux systemd / launcher; Windows shortcut via WSL)
-- ✅ Reproducible local gate: `./scripts/dev-verify.sh`
 
 ---
 
@@ -79,7 +101,7 @@ RC Simulator is a Qt UI that coordinates:
 
 - **Language:** Python 3.12+
 - **UI:** Qt / PySide6
-- **Linux input:** evdev (solo Linux)
+- **Linux input:** evdev (Linux only)
 - **Video (optional):** GStreamer (system packages)
 - **Quality:** ruff + pytest
 
@@ -104,8 +126,6 @@ sudo apt install -y python3-gi gstreamer1.0-tools gstreamer1.0-plugins-base gstr
 ## 🚀 Installation
 
 ### 1. Clone the repository
-
-N/A (local repo). If using GitHub:
 
 ```bash
 git clone https://github.com/adrirubim/rc_simulator.git
@@ -196,7 +216,12 @@ pytest
 
 Notes:
 
-- If you didn't install the package into the venv, use `PYTHONPATH=src`.
+- CI-parity local gate: `./scripts/dev-verify.sh`
+- If you didn't install the package into the venv, use `PYTHONPATH=src`:
+
+```bash
+PYTHONPATH=src pytest
+```
 
 ---
 
@@ -207,17 +232,26 @@ See `docs/ARCHITECTURE.md`.
 
 ---
 
+<a id="optional-tooling"></a>
+## 🧩 Optional Tooling
+
+N/A. This repository does not ship optional tooling beyond `scripts/` and `ops/`.
+
+---
+
 <a id="project-status"></a>
 ## 📊 Project Status
 
-Current status: **in development** (v0.1.0). Local validation + tests available.
+- **Current release:** **v0.1.0** — **In Development**
+- **Changelog:** see [CHANGELOG.md](CHANGELOG.md).
+- **Local quality gate:** `./scripts/dev-verify.sh` (CI parity).
 
 ---
 
 <a id="default-users-development"></a>
 ## ⚠️ Default Users (development)
 
-N/A.
+N/A. RC Simulator does not ship with user accounts. Any authentication/authorization is handled by the upstream system and/or the environment where the RC car is deployed.
 
 ---
 
@@ -246,7 +280,14 @@ CI parity (single entrypoint):
 <a id="contributing"></a>
 ## 🤝 Contributing
 
-See `CONTRIBUTING.md`.
+See [CONTRIBUTING](CONTRIBUTING.md) for local checks, branch/commit conventions, and how to open PRs and issues. This is an open-source project (MIT); for inquiries, contact the author.
+
+### Code Standards
+
+- **Python style**: Follow PEP 8 / PEP 20 and project conventions for layout and imports.
+- **Tests**: Write tests for new features; keep the test suite passing.
+- **Documentation**: Keep public behavior documented (docs and docstrings) in English.
+- **Pull Requests**: PRs must pass the [pull request template](.github/PULL_REQUEST_TEMPLATE.md) checklist and GitHub Actions CI.
 
 ---
 
@@ -269,5 +310,9 @@ See `CONTRIBUTING.md`.
 <a id="license"></a>
 ## 📄 License
 
-MIT — see `LICENSE`.
+MIT — See [LICENSE](LICENSE).
+
+---
+
+**Last Updated:** April 2026 · **Status:** In Development 🚧 · **Version:** v0.1.0 · **Stack:** [VERSION_STACK.md](VERSION_STACK.md)
 

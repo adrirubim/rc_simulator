@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ def audit(repo_dir: Path) -> list[Finding]:
                 "WARN",
                 "Carpeta legacy todavía presente",
                 "Existe `src/rc_simulator_frontend/`. Si ya decidiste quedarte con `rc_simulator`, puedes borrarla.\n"
-                f"- { _rel(legacy_dir, repo_dir) }",
+                f"- {_rel(legacy_dir, repo_dir)}",
             )
         )
 
@@ -53,7 +53,8 @@ def audit(repo_dir: Path) -> list[Finding]:
             )
         )
 
-    egg_info = sorted({p.resolve() for p in (list(repo_dir.glob("src/*.egg-info")) + list(repo_dir.glob("src/**/*.egg-info")))})
+    egg_info_candidates = list(repo_dir.glob("src/*.egg-info")) + list(repo_dir.glob("src/**/*.egg-info"))
+    egg_info = sorted({p.resolve() for p in egg_info_candidates})
     if egg_info:
         findings.append(
             Finding(
@@ -75,19 +76,32 @@ def audit(repo_dir: Path) -> list[Finding]:
                     same = _read_text(root_copy) == _read_text(sh)
                 except Exception:
                     same = False
+                content_note = (
+                    "El contenido es idéntico."
+                    if same
+                    else "El contenido difiere; conviene dejar una sola fuente de verdad."
+                )
                 findings.append(
                     Finding(
                         "INFO" if same else "WARN",
                         f"Duplicado de script: {sh.name}",
                         "Existe en dos ubicaciones:\n"
                         f"- {_rel(sh, repo_dir)}\n"
-                        f"- {_rel(root_copy, repo_dir)}\n"
-                        + ("El contenido es idéntico." if same else "El contenido difiere; conviene dejar una sola fuente de verdad."),
+                        f"- {_rel(root_copy, repo_dir)}\n" + content_note,
                     )
                 )
 
     # Shims en raíz que tocan sys.path para apuntar a src/
-    shim_candidates = [repo_dir / n for n in ("services.py", "state.py", "ui_theme.py", "ui_widgets.py", "moza_udp_client.py")]
+    shim_candidates = [
+        repo_dir / n
+        for n in (
+            "services.py",
+            "state.py",
+            "ui_theme.py",
+            "ui_widgets.py",
+            "moza_udp_client.py",
+        )
+    ]
     shim_re = re.compile(r"sys\.path\.insert\(0,\s*str\(_SRC\)\)")
     for p in shim_candidates:
         if not p.exists():
@@ -155,4 +169,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
