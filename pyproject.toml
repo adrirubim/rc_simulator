@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=82.0.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,8 +18,8 @@ dependencies = [
 # El video embebido usa GI/GStreamer (normalmente provisto por el sistema en Linux).
 video = []
 dev = [
-  "ruff>=0.6",
-  "pytest>=8",
+  "ruff>=0.15.10",
+  "pytest>=9.0.3",
 ]
 
 [tool.setuptools]
