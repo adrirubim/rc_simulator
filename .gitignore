@@ -25,3 +25,6 @@ Thumbs.db
 # Brainstorming mockups (local)
 .superpowers/
 
+
+# Windows ADS (Zone.Identifier)
+*:Zone.Identifier
