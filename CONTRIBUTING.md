@@ -37,7 +37,7 @@ pytest -q
 ## Code standards and tests
 
 - Keep imports at the top of the file (avoid inline imports).
-- Avoid hardcoded absolute paths like `/home/<user>/...` in runtime; prefer env vars or repo-relative paths when appropriate.
+- Avoid hardcoded absolute paths like `$HOME/...` in runtime; prefer env vars or repo-relative paths when appropriate.
 - Add or update tests for new behavior where relevant.
 
 ---

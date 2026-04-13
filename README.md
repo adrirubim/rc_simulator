@@ -169,7 +169,7 @@ python -m rc_simulator
 ## 🔒 Security
 
 - Never commit secrets (see `SECURITY.md`).
-- Avoid hardcoded absolute paths like `/home/<user>/...` in runtime; prefer env vars or repo-relative paths when appropriate.
+- Avoid hardcoded absolute paths like `$HOME/...` in runtime; prefer env vars or repo-relative paths when appropriate.
 
 ---
 
