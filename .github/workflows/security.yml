@@ -26,3 +26,9 @@ jobs:
         run: |
           python -c "import rc_simulator"
 
+      - name: Headless entrypoint import check
+        env:
+          PYTHONPATH: src
+        run: |
+          python -c "import rc_simulator.__main_headless__"
+

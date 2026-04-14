@@ -20,6 +20,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Hygiene checks (no build artifacts in src/)
+        run: |
+          python scripts/audit_layout.py
+          pytest -q tests/test_layout_hygiene.py -q
+
+      - name: Architecture guardrail (UI must not import IO)
+        run: |
+          pytest -q tests/test_architecture.py -q
+
+      - name: Headless entrypoint import smoke test
+        env:
+          PYTHONPATH: src
+        run: |
+          python -c "import rc_simulator.__main_headless__"
+
       - name: Pytest
         env:
           PYTHONPATH: src
