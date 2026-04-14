@@ -5,16 +5,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoWin = "C:\Users\user\Desktop\rc_simulator"
+$repoWin = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not (Test-Path -LiteralPath $repoWin)) {
   throw "Repo path not found: $repoWin"
 }
 
 $wsl = (Get-Command wsl.exe -ErrorAction Stop).Source
 
+$repoWinForWsl = $repoWin
+
 $bashCommand = @"
 set -euo pipefail
-cd /mnt/c/Users/user/Desktop/rc_simulator
+REPO_WIN="$repoWinForWsl"
+cd "$(wslpath -a "$REPO_WIN")"
 if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
 fi

@@ -10,7 +10,7 @@ echo "$DISPLAY"
 
 - If `DISPLAY` is empty, try a simple GUI app (for example `xclock` if available) to validate the GUI stack.
 
-### `Permission denied` al ejecutar `.venv/bin/python`
+### `Permission denied` when running `.venv/bin/python`
 
 This usually happens after **moving the project** and the venv still points to old paths.
 
@@ -26,7 +26,7 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]"
 ```
 
-### `evdev` no detecta MOZA / no hay acceso a `/dev/input`
+### `evdev` can't see MOZA / no access to `/dev/input`
 
 - On WSL/Windows: device passthrough may not be available.
 - On Linux, check permissions/groups for `/dev/input` (for example the `input` group).

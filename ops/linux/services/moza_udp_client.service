@@ -6,11 +6,11 @@ Wants=graphical.target
 [Service]
 Type=simple
 User=simulatore
-WorkingDirectory=/home/simulatore
+WorkingDirectory=%h
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/simulatore/.Xauthority
+Environment=XAUTHORITY=%h/.Xauthority
 Environment=QT_X11_NO_MITSHM=1
-ExecStart=/usr/bin/python3 /home/simulatore/moza_udp_client.py
+ExecStart=/usr/bin/python3 -m rc_simulator
 Restart=on-failure
 RestartSec=2
 

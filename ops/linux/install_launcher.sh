@@ -12,12 +12,12 @@ DESKTOP_DIR="${HOME}/Desktop"
 ICONS_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
 
 if [[ ! -f "${SOURCE_LAUNCHER}" ]]; then
-    echo "Launcher desktop non trovato: ${SOURCE_LAUNCHER}" >&2
+    echo "Desktop launcher not found: ${SOURCE_LAUNCHER}" >&2
     exit 1
 fi
 
 if [[ ! -f "${SOURCE_ICON}" ]]; then
-    echo "Icon file non trovato: ${SOURCE_ICON}" >&2
+    echo "Icon file not found: ${SOURCE_ICON}" >&2
     exit 1
 fi
 
@@ -37,7 +37,7 @@ fi
 update-desktop-database "${APPS_DIR}" >/dev/null 2>&1 || true
 gtk-update-icon-cache "${HOME}/.local/share/icons" >/dev/null 2>&1 || true
 
-echo "Launcher installato in ${APPS_DIR}"
+echo "Launcher installed to ${APPS_DIR}"
 if [[ -d "${DESKTOP_DIR}" ]]; then
-    echo "Launcher copiato anche su ${DESKTOP_DIR}"
+    echo "Launcher also copied to ${DESKTOP_DIR}"
 fi

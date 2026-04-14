@@ -1,19 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-
 def main() -> None:
-    # Permette esecuzione diretta anche senza PYTHONPATH=src
-    repo_dir = Path(__file__).resolve().parent
-    repo_root = repo_dir.parent
-    src_dir = repo_root / "src"
-    if src_dir.exists() and str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-
-    # Canonical entrypoint (Qt UI)
+    # Canonical entrypoint (Qt UI). This script assumes the package is installed in the active environment.
     from rc_simulator.ui_qt.app import main as run
 
     run()

@@ -14,7 +14,7 @@
   - Discovery and control (service logic consumed by the UI).
 - `src/rc_simulator/core/`
   - Configuration, state, events and models (types/payloads).
-- `src/rc_simulator/ports/` y `src/rc_simulator/adapters/`
+- `src/rc_simulator/ports/` and `src/rc_simulator/adapters/`
   - Ports and adapters (for example, video).
 
 ### Typical flow

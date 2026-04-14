@@ -3,7 +3,7 @@
 echo "Installing RC Simulator service..."
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-sudo cp "${REPO_ROOT}/services/moza_udp_client.service" /etc/systemd/system/
+sudo cp "${REPO_ROOT}/ops/linux/services/moza_udp_client.service" /etc/systemd/system/
 
 sudo systemctl daemon-reload
 

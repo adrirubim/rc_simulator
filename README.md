@@ -229,14 +229,10 @@ Notes:
 ```bash
 python -m pip install -U pip
 python -m pip install -e ".[dev]"
-PYTHONPATH=src pytest -q
+pytest -q
 ```
 
-- If you didn't install the package into the venv, use `PYTHONPATH=src`:
-
-```bash
-PYTHONPATH=src pytest
-```
+Note: this repository expects a standard venv install (`pip install -e ...`) for local development.
 
 ---
 

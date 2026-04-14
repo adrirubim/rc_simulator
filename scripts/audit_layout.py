@@ -37,8 +37,8 @@ def audit(repo_dir: Path) -> list[Finding]:
         findings.append(
             Finding(
                 "WARN",
-                "Carpeta legacy todavía presente",
-                "Existe `src/rc_simulator_frontend/`. Si ya decidiste quedarte con `rc_simulator`, puedes borrarla.\n"
+                "Legacy folder still present",
+                "Found `src/rc_simulator_frontend/`. If you already decided to keep `rc_simulator`, delete it.\n"
                 f"- {_rel(legacy_dir, repo_dir)}",
             )
         )
@@ -48,8 +48,8 @@ def audit(repo_dir: Path) -> list[Finding]:
         findings.append(
             Finding(
                 "ERROR",
-                "Falta pyproject.toml",
-                "No se encontró `pyproject.toml` en la raíz. Si moviste carpetas, revisa el root del repo.",
+                "Missing pyproject.toml",
+                "No `pyproject.toml` found at the repository root. If you moved folders, verify the repo root.",
             )
         )
 
@@ -59,13 +59,13 @@ def audit(repo_dir: Path) -> list[Finding]:
         findings.append(
             Finding(
                 "WARN",
-                "Artefactos de build dentro de src/",
-                "Se encontraron directorios `*.egg-info` (generados) dentro del árbol del proyecto:\n"
+                "Build artifacts inside src/",
+                "Found generated `*.egg-info` directories inside the project tree:\n"
                 + "\n".join(f"- {_rel(p, repo_dir)}" for p in egg_info),
             )
         )
 
-    # Duplicados típicos: ops/linux/*.sh copiados en raíz
+    # Common duplicates: ops/linux/*.sh copied to repo root
     ops_linux = repo_dir / "ops" / "linux"
     if ops_linux.exists():
         for sh in ops_linux.glob("*.sh"):
@@ -77,21 +77,21 @@ def audit(repo_dir: Path) -> list[Finding]:
                 except Exception:
                     same = False
                 content_note = (
-                    "El contenido es idéntico."
+                    "The content is identical."
                     if same
-                    else "El contenido difiere; conviene dejar una sola fuente de verdad."
+                    else "The content differs; keep a single source of truth."
                 )
                 findings.append(
                     Finding(
                         "INFO" if same else "WARN",
-                        f"Duplicado de script: {sh.name}",
-                        "Existe en dos ubicaciones:\n"
+                        f"Duplicate script: {sh.name}",
+                        "Found in two locations:\n"
                         f"- {_rel(sh, repo_dir)}\n"
                         f"- {_rel(root_copy, repo_dir)}\n" + content_note,
                     )
                 )
 
-    # Shims en raíz que tocan sys.path para apuntar a src/
+    # Root shims that touch sys.path to point at src/
     shim_candidates = [
         repo_dir / n
         for n in (
@@ -111,13 +111,13 @@ def audit(repo_dir: Path) -> list[Finding]:
             findings.append(
                 Finding(
                     "INFO",
-                    f"Shim en raíz: {p.name}",
-                    "Este archivo modifica `sys.path` para poder importar desde `src/` sin instalar el paquete. "
-                    "No es necesariamente malo, pero suele ser señal de compat/migración.",
+                    f"Root shim: {p.name}",
+                    "This file modifies `sys.path` to import from `src/` without installing the package. "
+                    "This is usually a migration/compatibility signal; prefer proper installs when possible.",
                 )
             )
 
-    # Rutas absolutas /home/... en código y scripts
+    # Absolute /home/... paths in code and scripts
     abs_hits: list[str] = []
     for p in repo_dir.rglob("*"):
         if any(part in ignored_dirnames for part in p.parts):
@@ -139,8 +139,8 @@ def audit(repo_dir: Path) -> list[Finding]:
         findings.append(
             Finding(
                 "WARN",
-                "Referencias a rutas absolutas (/home/...)",
-                "Estas rutas suelen romperse si moviste el proyecto o cambiaste de usuario/host.\n"
+                "Absolute path references (/home/...)",
+                "These paths usually break if you moved the project or changed user/host.\n"
                 + "\n".join(f"- {h}" for h in abs_hits),
             )
         )
@@ -152,7 +152,7 @@ def main() -> int:
     repo_dir = Path(__file__).resolve().parents[1]
     findings = audit(repo_dir)
     if not findings:
-        print("OK: no se detectaron señales típicas de mezcla.")
+        print("OK: no typical post-move mixing signals detected.")
         return 0
 
     order = {"ERROR": 0, "WARN": 1, "INFO": 2}
