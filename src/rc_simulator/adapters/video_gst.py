@@ -40,13 +40,13 @@ class GstVideoReceiver(VideoReceiver):
             gi.require_version("Gst", "1.0")
             from gi.repository import Gst  # type: ignore
         except Exception as e:
-            self.on_error(f"GStreamer non disponibile: {e}")
+            self.on_error(f"GStreamer not available: {e}")
             return False
 
         try:
             Gst.init(None)
         except Exception as e:
-            self.on_error(f"Errore init GStreamer: {e}")
+            self.on_error(f"GStreamer init error: {e}")
             return False
 
         # Optimized H264/RTP pipeline (low-latency, fail-soft).
@@ -67,7 +67,7 @@ class GstVideoReceiver(VideoReceiver):
             pipeline = Gst.parse_launch(desc)
             appsink = pipeline.get_by_name("sink")
             if appsink is None:
-                self.on_error("Pipeline video non valida (appsink mancante).")
+                self.on_error("Invalid video pipeline (missing appsink).")
                 return False
 
             def _on_new_sample(sink):
@@ -117,17 +117,17 @@ class GstVideoReceiver(VideoReceiver):
                         if msg is None:
                             continue
                         if msg.type == Gst.MessageType.EOS:
-                            self.on_error("Video: stream terminato (EOS).")
+                            self.on_error("Video: stream ended (EOS).")
                             break
                         if msg.type == Gst.MessageType.ERROR:
                             err, dbg = msg.parse_error()
                             details = f"{err}"
                             if dbg:
                                 details = f"{details} ({dbg})"
-                            self.on_error(f"Video: errore GStreamer: {details}")
+                            self.on_error(f"Video: GStreamer error: {details}")
                             break
                 except Exception as e:
-                    self.on_error(f"Video: errore monitor bus: {e}")
+                    self.on_error(f"Video: bus monitor error: {e}")
                 finally:
                     # Best-effort cleanup; UI side handles retry scheduling.
                     try:
@@ -142,7 +142,7 @@ class GstVideoReceiver(VideoReceiver):
             pipeline.set_state(Gst.State.PLAYING)
             return True
         except Exception as e:
-            self.on_error(f"Impossibile avviare pipeline video: {e}")
+            self.on_error(f"Unable to start video pipeline: {e}")
             self._pipeline = None
             self._running = False
             return False

@@ -47,7 +47,7 @@ def build_log_dock(
     on_pause_toggled: Callable[[bool], None],
     on_clear_clicked: Callable[[], None],
 ) -> LogDock:
-    dock = QDockWidget("Log di sistema", main_window)
+    dock = QDockWidget("System log", main_window)
     dock.setObjectName("log_dock")
     dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
 
@@ -57,7 +57,7 @@ def build_log_dock(
     dock_l.setSpacing(8)
 
     filter_edit = QLineEdit(dock_body)
-    filter_edit.setPlaceholderText("Filtro log…")
+    filter_edit.setPlaceholderText("Filter logs…")
     filter_edit.textChanged.connect(lambda _t: on_filter_changed())
     dock_l.addWidget(filter_edit)
 
@@ -68,14 +68,14 @@ def build_log_dock(
     log_btns_l = QHBoxLayout(log_btns)
     log_btns_l.setContentsMargins(0, 0, 0, 0)
 
-    pause_btn = QPushButton("Pausa", log_btns)
+    pause_btn = QPushButton("Pause", log_btns)
     pause_btn.setCheckable(True)
     pause_btn.toggled.connect(on_pause_toggled)
-    pause_btn.setToolTip("Pausa l'autoscroll dei log (si attiva anche automaticamente quando fai scroll).")
+    pause_btn.setToolTip("Pause log auto-scroll (also auto-enables when you scroll up).")
 
-    clear_btn = QPushButton("Pulisci", log_btns)
+    clear_btn = QPushButton("Clear", log_btns)
     clear_btn.clicked.connect(on_clear_clicked)
-    clear_btn.setToolTip("Svuota i log.")
+    clear_btn.setToolTip("Clear the log view.")
 
     log_btns_l.addWidget(pause_btn)
     log_btns_l.addWidget(clear_btn)
@@ -88,7 +88,7 @@ def build_log_dock(
 
 
 def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
-    telemetry_dock = QDockWidget("Telemetria (debug)", main_window)
+    telemetry_dock = QDockWidget("Telemetry (debug)", main_window)
     telemetry_dock.setObjectName("telemetry_dock")
     telemetry_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
 
@@ -115,9 +115,9 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
         t_l.addWidget(wrap)
         return lab, bar
 
-    _steer_lab, steer_bar = _make_bar("Sterzo (abs)")
-    _gas_lab, gas_bar = _make_bar("Acceleratore")
-    _brake_lab, brake_bar = _make_bar("Freno")
+    _steer_lab, steer_bar = _make_bar("Steering (abs)")
+    _gas_lab, gas_bar = _make_bar("Throttle")
+    _brake_lab, brake_bar = _make_bar("Brake")
     steer_bar.setProperty("barKind", "steer")
     gas_bar.setProperty("barKind", "gas")
     brake_bar.setProperty("barKind", "brake")

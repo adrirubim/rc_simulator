@@ -33,14 +33,14 @@ class SessionController:
         if self.scan_thread is not None and self.scan_thread.is_alive():
             return False
 
-        self.events.put(StatusEvent(summary="Scansione…", detail="", phase=AppPhase.SCANNING))
+        self.events.put(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING))
         self.scan_thread = threading.Thread(target=self._scan_worker, daemon=True)
         self.scan_thread.start()
         return True
 
     def _scan_worker(self) -> None:
-        self.events.put(StatusEvent(summary="Scansione…", detail="", phase=AppPhase.SCANNING))
-        self.events.put(LogEvent(level="INFO", message="Ricerca di auto RC in rete…"))
+        self.events.put(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING))
+        self.events.put(LogEvent(level="INFO", message="Searching for RC cars on the network…"))
         cars_dict = discover_cars()
         cars = list(cars_dict.values())
         cars.sort(key=lambda c: (c.name, c.ip))
@@ -53,7 +53,7 @@ class SessionController:
 
         self.events.put(
             StatusEvent(
-                summary="Connessione…",
+                summary="Connecting…",
                 detail=f"{car.name} ({car.ip}:{car.control_port})",
                 phase=AppPhase.CONNECTING,
             )
@@ -80,7 +80,7 @@ class SessionController:
     def disconnect(self) -> None:
         if self.stop_event is None:
             return
-        self.events.put(StatusEvent(summary="Disconnessione…", detail="", phase=AppPhase.DISCONNECTING))
+        self.events.put(StatusEvent(summary="Disconnecting…", detail="", phase=AppPhase.DISCONNECTING))
         try:
             self.stop_event.set()
         except Exception:

@@ -14,8 +14,8 @@ from .control_math import apply_deadzone, clamp, norm_axis, norm_trigger
 from .steer_unwrap import SteerUnwrapper
 
 # =====================
-# ASSI (confermati)
-# 0 volante / 2 gas / 5 freno
+# AXES (confirmed)
+# 0 steering / 2 throttle / 5 brake
 # =====================
 STEER_CODE = ecodes.ABS_X
 THROTTLE_CODE = ecodes.ABS_Z
@@ -37,7 +37,7 @@ STEER_LIMIT_DEFAULT = 1.0
 # anti-wrap
 WRAP_JUMP_FRAC = 0.45
 
-# invio (defaults; overridden by config at runtime)
+# send (defaults; overridden by config at runtime)
 SEND_HZ_DEFAULT = 120
 
 # deadzone
@@ -58,29 +58,29 @@ def open_moza_device(dev_path: str) -> tuple[InputDevice, dict[int, Any]]:
         (BRAKE_CODE, "BRAKE"),
     ]:
         if code not in abs_map:
-            raise RuntimeError(f"{label} axis non trovato (code={code}).")
+            raise RuntimeError(f"{label} axis not found (code={code}).")
 
     return dev, abs_map
 
 
 def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
     """
-    Sessione di guida verso la macchina selezionata.
-    Gira in thread separato per non bloccare la GUI.
+    Drive session worker for the selected car.
+    Runs in a separate thread to avoid blocking the GUI.
     """
     orange_ip = car["ip"]
     orange_port = car["control_port"]
 
     ui_queue.put(
         StatusEvent(
-            summary="Connesso",
+            summary="Connected",
             detail=f"{car['name']} ({orange_ip}:{orange_port})",
             phase=AppPhase.CONNECTED,
         )
     )
-    ui_queue.put(LogEvent(level="INFO", message=f"Connesso a {car['name']}"))
+    ui_queue.put(LogEvent(level="INFO", message=f"Connected to {car['name']}"))
     ui_queue.put(LogEvent(level="INFO", message=f"IP: {orange_ip}"))
-    ui_queue.put(LogEvent(level="INFO", message=f"Porta controllo: {orange_port}"))
+    ui_queue.put(LogEvent(level="INFO", message=f"Control port: {orange_port}"))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dev = None
@@ -176,7 +176,7 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
 
     except Exception as e:
         ui_queue.put(MozaStateEvent(connected=False))
-        ui_queue.put(ErrorEvent(message=f"Errore nella sessione di controllo: {e}"))
+        ui_queue.put(ErrorEvent(message=f"Control session error: {e}"))
     finally:
         try:
             stop_msg = f"{time.time():.6f} 0.0000 0.0000"
@@ -199,10 +199,10 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
                     gas=0.0,
                     brake=0.0,
                     output=0.0,
-                    text="Sessione ferma",
+                    text="Session stopped",
                 ).__dict__
             )
         )
-        ui_queue.put(StatusEvent(summary="Disconnesso", detail="", phase=AppPhase.IDLE))
+        ui_queue.put(StatusEvent(summary="Disconnected", detail="", phase=AppPhase.IDLE))
         ui_queue.put(MozaStateEvent(connected=False))
         ui_queue.put(SessionStoppedEvent(reason="worker-exit"))

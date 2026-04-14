@@ -14,14 +14,14 @@ DISCOVERY_PORT = 37020
 DISCOVERY_TIMEOUT_S = 3.0
 DISCOVERY_STALE_S = 3.0
 
-# fallback porta controllo
+# fallback control port
 DEFAULT_CONTROL_PORT = 5005
 
 
 def discover_cars(timeout_s: float = DISCOVERY_TIMEOUT_S) -> dict[str, Car]:
     """
-    Ascolta i beacon UDP broadcast e costruisce una lista di auto vive.
-    Ritorna un dict indicizzato per car_id.
+    Listen for UDP broadcast beacons and build a list of live cars.
+    Returns a dict keyed by car_id.
     """
     cars: dict[str, dict[str, Any]] = {}
 

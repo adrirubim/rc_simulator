@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
         left_l.setSpacing(6 if self.cfg.density == "compact" else 8)
 
         self.search = QLineEdit(self.left_panel)
-        self.search.setPlaceholderText("Cerca auto…")
+        self.search.setPlaceholderText("Search cars…")
         self.search.textChanged.connect(self._debounce_apply_car_filter)
         left_l.addWidget(self.search)
 
@@ -177,7 +177,7 @@ class MainWindow(QMainWindow):
         self.list.itemSelectionChanged.connect(self.on_select)
         left_l.addWidget(self.list, 1)
 
-        self.list_hint = QLabel("Suggerimento: esegui una scansione per trovare le auto in rete.", self.left_panel)
+        self.list_hint = QLabel("Tip: run a scan to find cars on the network.", self.left_panel)
         self.list_hint.setObjectName("muted")
         self.list_hint.setWordWrap(True)
         self.list_hint.setVisible(False)
@@ -186,17 +186,17 @@ class MainWindow(QMainWindow):
         btn_row = QWidget(self.left_panel)
         btn_row_l = QHBoxLayout(btn_row)
         btn_row_l.setContentsMargins(0, 0, 0, 0)
-        self.btn_scan = QPushButton("Scansione", btn_row)
+        self.btn_scan = QPushButton("Scan", btn_row)
         self.btn_scan.clicked.connect(self.start_scan)
-        self.btn_scan.setToolTip("Scansiona la rete per trovare le auto.")
-        self.btn_connect = QPushButton("Connetti", btn_row)
+        self.btn_scan.setToolTip("Scan the network to find cars.")
+        self.btn_connect = QPushButton("Connect", btn_row)
         self.btn_connect.setObjectName("primaryButton")
         self.btn_connect.clicked.connect(self.connect_selected)
-        self.btn_connect.setToolTip("Connetti all’auto selezionata (Ctrl+Invio).")
-        self.btn_disconnect = QPushButton("Disconnetti", btn_row)
+        self.btn_connect.setToolTip("Connect to the selected car (Ctrl+Enter).")
+        self.btn_disconnect = QPushButton("Disconnect", btn_row)
         self.btn_disconnect.setObjectName("dangerButton")
         self.btn_disconnect.clicked.connect(self.disconnect_session)
-        self.btn_disconnect.setToolTip("Disconnetti la sessione (Esc).")
+        self.btn_disconnect.setToolTip("Disconnect the session (Esc).")
         btn_row_l.addWidget(self.btn_scan)
         btn_row_l.addWidget(self.btn_connect)
         btn_row_l.addWidget(self.btn_disconnect)
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
             ms_l.setContentsMargins(14, 14, 14, 14)
             ms_l.setSpacing(10)
 
-        self.mid_state_title = QLabel("Pronto", self.mid_state)
+        self.mid_state_title = QLabel("Ready", self.mid_state)
         self.mid_state_title.setObjectName("title")
         self.mid_state_body = QLabel("", self.mid_state)
         self.mid_state_body.setWordWrap(True)
@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
 
         mid_l.addWidget(self.mid_state)
 
-        self.session_label = QLabel("Stato sessione: Pronto", self.mid_panel)
+        self.session_label = QLabel("Session status: Ready", self.mid_panel)
         self.detail_label = QLabel("", self.mid_panel)
         self.phase_progress = QProgressBar(self.mid_panel)
         self.phase_progress.setRange(0, 0)
@@ -243,12 +243,12 @@ class MainWindow(QMainWindow):
         self.phase_progress.setFixedHeight(10)
         self.phase_progress.setVisible(False)
 
-        self.telemetry_label = QLabel("Sessione inattiva", self.mid_panel)
+        self.telemetry_label = QLabel("Session inactive", self.mid_panel)
         self.telemetry_label.setWordWrap(True)
         mid_l.addWidget(self.session_label)
         mid_l.addWidget(self.detail_label)
         mid_l.addWidget(self.phase_progress)
-        mid_l.addWidget(QLabel("Video live (integrato in Qt):", self.mid_panel))
+        mid_l.addWidget(QLabel("Live video (embedded in Qt):", self.mid_panel))
 
         self.video_container = QWidget(self.mid_panel)
         self.video_container.setMinimumHeight(240)
@@ -256,7 +256,7 @@ class MainWindow(QMainWindow):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(0)
 
-        self.video_view = QLabel("Video: non disponibile", self.video_container)
+        self.video_view = QLabel("Video: not available", self.video_container)
         self.video_view.setAlignment(Qt.AlignCenter)
         grid.addWidget(self.video_view, 0, 0, 1, 1)
 
@@ -288,18 +288,18 @@ class MainWindow(QMainWindow):
         self.video_overlay.setVisible(True)
         grid.addWidget(self.video_overlay, 0, 0, 1, 1)
 
-        self.btn_video_help = QPushButton("Requisiti video", self.video_container)
+        self.btn_video_help = QPushButton("Video requirements", self.video_container)
         self.btn_video_help.setObjectName("secondaryButton")
         self.btn_video_help.clicked.connect(self._show_video_requirements_hint)
-        self.btn_video_help.setToolTip("Mostra cosa installare per il video integrato.")
+        self.btn_video_help.setToolTip("Show what to install for embedded video.")
         self.btn_video_help.setVisible(False)
         grid.addWidget(self.btn_video_help, 0, 0, 1, 1, alignment=Qt.AlignBottom | Qt.AlignRight)
 
-        self.btn_overlay_disconnect = QPushButton("DISCONNETTI", self.video_container)
+        self.btn_overlay_disconnect = QPushButton("DISCONNECT", self.video_container)
         self.btn_overlay_disconnect.setObjectName("dangerButton")
         self.btn_overlay_disconnect.clicked.connect(self.disconnect_session)
         self.btn_overlay_disconnect.setVisible(False)
-        self.btn_overlay_disconnect.setToolTip("Disconnetti subito (Esc).")
+        self.btn_overlay_disconnect.setToolTip("Disconnect now (Esc).")
         grid.addWidget(self.btn_overlay_disconnect, 0, 0, 1, 1, alignment=Qt.AlignTop | Qt.AlignRight)
         self.btn_overlay_disconnect.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
 
@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.drive_banner, 0, 0, 1, 1, alignment=Qt.AlignBottom | Qt.AlignHCenter)
 
         mid_l.addWidget(self.video_container, 1)
-        mid_l.addWidget(QLabel("Telemetria:", self.mid_panel))
+        mid_l.addWidget(QLabel("Telemetry:", self.mid_panel))
         mid_l.addWidget(self.telemetry_label)
 
         center_l.addWidget(self.mid_panel, 1)
@@ -385,8 +385,8 @@ class MainWindow(QMainWindow):
         self._show_banner(
             "muted",
             (
-                "Scorciatoie:  Ctrl+F cerca  |  Ctrl+Invio connetti  |  Ctrl+Shift+F filtro log  |  "
-                "Ctrl+L pulisci log  |  Esc (Guida→Pannello / Pannello→Disconnetti)  |  F1 aiuto"
+                "Shortcuts:  Ctrl+F search  |  Ctrl+Enter connect  |  Ctrl+Shift+F log filter  |  "
+                "Ctrl+L clear logs  |  Esc (Drive→Panel / Panel→Disconnect)  |  F1 help"
             ),
             auto_hide_ms=12_000,
         )
@@ -394,12 +394,12 @@ class MainWindow(QMainWindow):
     def _update_bottom_hint(self) -> None:
         # Keep hints consistent with Esc logic and current layout.
         if self.btn_drive.isChecked() and self.isFullScreen():
-            self.bottom.setText("Ctrl+F cerca | Ctrl+L pulisci log | Esc per uscire dalla modalità Guida")
+            self.bottom.setText("Ctrl+F search | Ctrl+L clear logs | Esc to exit Drive Mode")
             return
         if self.is_connected:
-            self.bottom.setText("Ctrl+F cerca | Ctrl+L pulisci log | Esc per disconnettere")
+            self.bottom.setText("Ctrl+F search | Ctrl+L clear logs | Esc to disconnect")
             return
-        self.bottom.setText("Ctrl+F cerca | Ctrl+L pulisci log | Esc per schermo intero")
+        self.bottom.setText("Ctrl+F search | Ctrl+L clear logs | Esc for fullscreen")
 
     # ---------------- Persistence / layouts ----------------
     def _restore_layout(self) -> None:
@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
     # ---------------- Core actions ----------------
     def start_scan(self) -> None:
         if self.controller.drive_thread is not None and self.controller.drive_thread.is_alive():
-            self._show_banner("warn", "Sessione attiva: disconnetti prima di avviare una nuova scansione.")
+            self._show_banner("warn", "Active session: disconnect before starting a new scan.")
             return
         if self.controller.scan_thread is not None and self.controller.scan_thread.is_alive():
             return
@@ -468,22 +468,22 @@ class MainWindow(QMainWindow):
 
     def connect_selected(self) -> None:
         if self.controller.drive_thread is not None and self.controller.drive_thread.is_alive():
-            self._show_banner("muted", "Esiste già una sessione attiva.")
+            self._show_banner("muted", "A session is already active.")
             return
         if not self.cars:
-            self._show_banner("warn", "Nessuna auto trovata: esegui prima una scansione.")
+            self._show_banner("warn", "No cars found: run a scan first.")
             return
         if self.selected_index is None:
-            self._show_banner("warn", "Selezione mancante: seleziona un'auto dalla lista.")
+            self._show_banner("warn", "Missing selection: select a car from the list.")
             return
         if not (0 <= self.selected_index < len(self.filtered_indices)):
-            self._show_banner("warn", "Selezione mancante: seleziona un'auto dalla lista.")
+            self._show_banner("warn", "Missing selection: select a car from the list.")
             return
         car = self.cars[self.filtered_indices[self.selected_index]]
         self.active_car_id = str(car.ip or "")
         self._refresh_car_row_active_styles()
 
-        self.session_label.setText("Stato sessione: Connessione…")
+        self.session_label.setText("Session status: Connecting…")
         self.detail_label.setText(f"{car.name} ({car.ip}:{car.control_port})")
         self.badge_moza.setText("MOZA: …")
         self.is_connecting = True
@@ -493,7 +493,7 @@ class MainWindow(QMainWindow):
         if not ok:
             self.is_connecting = False
             self._update_controls()
-            self._show_banner("warn", "Impossibile avviare la sessione (già attiva).")
+            self._show_banner("warn", "Unable to start the session (already active).")
             return
         self._start_video_for_car(car)
         # In Drive mode we force fullscreen.
@@ -502,7 +502,7 @@ class MainWindow(QMainWindow):
 
     def disconnect_session(self) -> None:
         if self.controller.stop_event is None:
-            self.session_label.setText("Stato sessione: Nessuna sessione attiva")
+            self.session_label.setText("Session status: No active session")
             self.set_connection_state(False)
             self.badge_moza.setText("MOZA: --")
             self.active_car_id = None
@@ -510,7 +510,7 @@ class MainWindow(QMainWindow):
             self.is_connecting = False
             self._update_controls()
             return
-        self.append_log("WARN", "Richiesta di disconnessione…")
+        self.append_log("WARN", "Disconnect requested…")
         try:
             self.controller.disconnect()
         except Exception:
@@ -518,9 +518,9 @@ class MainWindow(QMainWindow):
 
     def set_connection_state(self, connected: bool) -> None:
         self.is_connected = connected
-        self.badge_conn.setText("CONNESSO" if connected else "DISCONNESSO")
+        self.badge_conn.setText("CONNECTED" if connected else "DISCONNECTED")
         self._set_badge_kind(self.badge_conn, "ok" if connected else "warn")
-        self.hud_conn.setText("CONNESSO" if connected else "DISCONNESSO")
+        self.hud_conn.setText("CONNECTED" if connected else "DISCONNECTED")
         self._set_badge_kind(self.hud_conn, "ok" if connected else "warn")
         self.btn_connect.setEnabled(not connected)
         # Overlay disconnect must always be accessible in Drive Mode
@@ -542,9 +542,9 @@ class MainWindow(QMainWindow):
         self.btn_scan.setEnabled(bool(not session_active and not self.is_scanning and not self.is_connecting))
 
         # Make state visible in the primary actions (real-time operator UX).
-        self.btn_scan.setText("Scansione…" if self.is_scanning else "Scansione")
-        self.btn_connect.setText("Connessione…" if self.is_connecting else "Connetti")
-        self.btn_disconnect.setText("Disconnetti")
+        self.btn_scan.setText("Scanning…" if self.is_scanning else "Scan")
+        self.btn_connect.setText("Connecting…" if self.is_connecting else "Connect")
+        self.btn_disconnect.setText("Disconnect")
         self.phase_progress.setVisible(bool(self.is_scanning or self.is_connecting))
         self._refresh_mid_state()
         self._refresh_video_overlay()
@@ -552,17 +552,17 @@ class MainWindow(QMainWindow):
     def _refresh_mid_state(self) -> None:
         # Single, predictable guidance area in the middle panel.
         if self.is_scanning:
-            self.mid_state_title.setText("Scansione in corso…")
+            self.mid_state_title.setText("Scanning…")
             self.mid_state_body.setText(
-                "Sto cercando auto nella rete locale. Attendi i risultati nella lista a sinistra."
+                "Searching for cars on the local network. Results will appear in the list on the left."
             )
             self.mid_state.setVisible(True)
             return
 
         if self.is_connecting:
-            self.mid_state_title.setText("Connessione…")
+            self.mid_state_title.setText("Connecting…")
             self.mid_state_body.setText(
-                "Sto avviando la sessione con l’auto selezionata. Se il video non parte, usa “Requisiti video”."
+                "Starting a session with the selected car. If video doesn't start, use “Video requirements”."
             )
             self.mid_state.setVisible(True)
             return
@@ -574,29 +574,29 @@ class MainWindow(QMainWindow):
 
         # Not connected.
         if not self.cars:
-            self.mid_state_title.setText("Nessuna auto")
+            self.mid_state_title.setText("No cars")
             self.mid_state_body.setText(
-                "Esegui una scansione per trovare le auto nella rete. Poi seleziona un’auto e premi Connetti."
+                "Run a scan to find cars on the network. Then select a car and press Connect."
             )
             self.mid_state.setVisible(True)
             return
 
         has_selection = self.selected_index is not None and 0 <= int(self.selected_index) < len(self.filtered_indices)
         if not has_selection:
-            self.mid_state_title.setText("Seleziona un’auto")
-            self.mid_state_body.setText("Scegli un’auto dalla lista a sinistra per vedere i dettagli e connetterti.")
+            self.mid_state_title.setText("Select a car")
+            self.mid_state_body.setText("Choose a car from the list on the left to view details and connect.")
             self.mid_state.setVisible(True)
             return
 
-        self.mid_state_title.setText("Pronto a connettere")
-        self.mid_state_body.setText("Premi Connetti per avviare la sessione. Scorciatoia: Ctrl+Invio.")
+        self.mid_state_title.setText("Ready to connect")
+        self.mid_state_body.setText("Press Connect to start a session. Shortcut: Ctrl+Enter.")
         self.mid_state.setVisible(True)
 
     def _show_video_requirements_hint(self) -> None:
         self._show_banner(
             "muted",
             (
-                "Video integrato richiede GI/GStreamer. In Ubuntu/WSL: "
+                "Embedded video requires GI/GStreamer. On Ubuntu/WSL: "
                 "sudo apt install -y python3-gi gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
             ),
             auto_hide_ms=12_000,
@@ -618,25 +618,25 @@ class MainWindow(QMainWindow):
         if not self.is_connected:
             if self.is_connecting:
                 self.video_overlay_title.setText("Video")
-                self.video_overlay_body.setText("Connessione…")
+                self.video_overlay_body.setText("Connecting…")
                 self.video_overlay_action.setVisible(False)
                 self.video_overlay.setVisible(True)
                 return
             if self.is_scanning:
                 self.video_overlay_title.setText("Video")
-                self.video_overlay_body.setText("In attesa di connessione…")
+                self.video_overlay_body.setText("Waiting for connection…")
                 self.video_overlay_action.setVisible(False)
                 self.video_overlay.setVisible(True)
                 return
             self.video_overlay_title.setText("Video")
-            self.video_overlay_body.setText("Nessuna sessione attiva.")
+            self.video_overlay_body.setText("No active session.")
             self.video_overlay_action.setVisible(False)
             self.video_overlay.setVisible(True)
             return
 
         if self.is_connecting:
             self.video_overlay_title.setText("Video")
-            self.video_overlay_body.setText("Connessione…")
+            self.video_overlay_body.setText("Connecting…")
             self.video_overlay_action.setVisible(False)
             self.video_overlay.setVisible(True)
             return
@@ -647,14 +647,14 @@ class MainWindow(QMainWindow):
             self.video_overlay.setVisible(False)
             return
 
-        self.video_overlay_title.setText("Video non disponibile")
+        self.video_overlay_title.setText("Video not available")
         if self._video_missing_deps:
-            self.video_overlay_body.setText("Mancano dipendenze GI/GStreamer per il video integrato.")
-            self.video_overlay_action.setText("Requisiti video")
+            self.video_overlay_body.setText("Missing GI/GStreamer dependencies for embedded video.")
+            self.video_overlay_action.setText("Video requirements")
             self.video_overlay_action.setVisible(True)
         else:
-            self.video_overlay_body.setText("Nessun frame ricevuto. Controlla rete/porta o riprova.")
-            self.video_overlay_action.setText("Riprova")
+            self.video_overlay_body.setText("No frames received. Check network/port or retry.")
+            self.video_overlay_action.setText("Retry")
             self.video_overlay_action.setVisible(True)
         self.video_overlay.setVisible(True)
 
@@ -699,12 +699,12 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key_Escape:
             # Priority:
-            # 1) Drive Mode (B): return to Pannello (A), do NOT disconnect.
+            # 1) Drive Mode (B): return to Panel (A), do NOT disconnect.
             if self.isFullScreen() and self.btn_drive.isChecked():
                 self.apply_layout("A")
                 event.accept()
                 return
-            # 2) Pannello/altro: se sessione attiva -> disconnetti
+            # 2) Panel/other: if session is active -> disconnect
             if self.is_connected:
                 self.disconnect_session()
                 event.accept()
@@ -756,7 +756,7 @@ class MainWindow(QMainWindow):
         def on_error(msg: str) -> None:
             def _apply_err() -> None:
                 self._append_log_rate_limited("WARN", msg, key="video-error", min_interval_ms=2500)
-                self.video_view.setText("Video: non disponibile")
+                self.video_view.setText("Video: not available")
                 self.badge_video.setText("VIDEO OFF")
                 self._set_badge_kind(self.badge_video, "muted")
                 self.hud_video.setText("VIDEO OFF")
@@ -764,7 +764,7 @@ class MainWindow(QMainWindow):
                 self.video_view.setPixmap(QPixmap())
                 # Show requirements only when GI/GStreamer is missing.
                 lowered = str(msg).lower()
-                missing_deps = ("gstreamer non disponibile" in lowered) or ("gi/gstreamer" in lowered)
+                missing_deps = ("gstreamer not available" in lowered) or ("gi/gstreamer" in lowered)
                 self._video_missing_deps = bool(missing_deps)
                 self.btn_video_help.setVisible(bool(missing_deps))
                 # If GI/GStreamer is missing, retries are pointless.
@@ -797,7 +797,7 @@ class MainWindow(QMainWindow):
         )
         ok = self._video_receiver.start()
         if not ok:
-            on_error("Video: backend non disponibile (GI/GStreamer).")
+            on_error("Video: backend not available (GI/GStreamer).")
 
     def _stop_video(self) -> None:
         if self._video_receiver is not None:
@@ -809,7 +809,7 @@ class MainWindow(QMainWindow):
         self._video_retry_ms = 500
         self._video_retry_enabled = True
         self._video_missing_deps = False
-        self.video_view.setText("Video: non disponibile")
+        self.video_view.setText("Video: not available")
         self.video_view.setPixmap(QPixmap())
         self._last_video_pixmap = None
         self.btn_video_help.setVisible(False)
@@ -1040,7 +1040,7 @@ class MainWindow(QMainWindow):
                 self.log_view.scrollToBottom()
 
     def _on_pause_log_toggled(self, paused: bool) -> None:
-        self.btn_pause_log.setText("Riprendi" if paused else "Pausa")
+        self.btn_pause_log.setText("Resume" if paused else "Pause")
         self.btn_pause_log.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay if paused else QStyle.SP_MediaPause))
         if not paused:
             self._log_auto_paused = False
@@ -1149,23 +1149,23 @@ class MainWindow(QMainWindow):
                         self.cars = list(cars) if isinstance(cars, list) else []
                         self.apply_car_filter()
                         if self.cars:
-                            self.append_log("INFO", f"Scansione completata: {len(self.cars)} auto trovate.")
+                            self.append_log("INFO", f"Scan complete: {len(self.cars)} cars found.")
                         else:
-                            self.append_log("WARN", "Scansione completata: nessuna auto trovata.")
+                            self.append_log("WARN", "Scan complete: no cars found.")
                     case ScanDoneEvent():
                         self.is_scanning = False
                         self.badge_scan.setVisible(False)
                         self._update_controls()
                     case ErrorEvent(message=message):
                         self.append_log("ERROR", str(message))
-                        self._show_banner("danger", f"Errore: {message}", auto_hide_ms=8000)
+                        self._show_banner("danger", f"Error: {message}", auto_hide_ms=8000)
                     case MozaStateEvent(connected=ok):
                         self.badge_moza.setText("MOZA: OK" if ok else "MOZA: NO")
                         self._set_badge_kind(self.badge_moza, "ok" if ok else "warn")
                         self.hud_moza.setText("MOZA: OK" if ok else "MOZA: NO")
                         self._set_badge_kind(self.hud_moza, "ok" if ok else "warn")
                     case SessionStoppedEvent():
-                        self.append_log("WARN", "Sessione terminata.")
+                        self.append_log("WARN", "Session ended.")
                         self.set_connection_state(False)
                         self._stop_video()
                         self.badge_video.setText("VIDEO OFF")

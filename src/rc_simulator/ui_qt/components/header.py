@@ -37,13 +37,13 @@ def build_header(
 
     header_l.addStretch(1)
 
-    badge_scan = QLabel("SCANSIONE", header_widget)
+    badge_scan = QLabel("SCANNING", header_widget)
     badge_scan.setProperty("badge", True)
     badge_scan.setProperty("badgeKind", "warn")
     badge_scan.setVisible(False)
     header_l.addWidget(badge_scan)
 
-    badge_conn = QLabel("DISCONNESSO", header_widget)
+    badge_conn = QLabel("DISCONNECTED", header_widget)
     badge_moza = QLabel("MOZA: --", header_widget)
     badge_video = QLabel("VIDEO OFF", header_widget)
     badge_output = QLabel("+0.000", header_widget)
@@ -52,16 +52,16 @@ def build_header(
         b.setProperty("badgeKind", "muted")
         header_l.addWidget(b)
 
-    btn_drive = QPushButton("Guida", header_widget)
+    btn_drive = QPushButton("Drive", header_widget)
     btn_drive.setCheckable(True)
     btn_drive.clicked.connect(on_toggle_drive_mode)
-    btn_drive.setToolTip("Modalità Guida (schermo intero). Esc per uscire dalla modalità Guida.")
+    btn_drive.setToolTip("Drive Mode (fullscreen). Press Esc to exit Drive Mode.")
     header_l.addWidget(btn_drive)
 
     btn_debug = QPushButton("Debug", header_widget)
     btn_debug.setCheckable(True)
     btn_debug.clicked.connect(on_toggle_debug_mode)
-    btn_debug.setToolTip("Telemetria/Trace dockabili (layout C).")
+    btn_debug.setToolTip("Dockable telemetry/trace panels (layout C).")
     header_l.addWidget(btn_debug)
 
     return Header(
