@@ -77,9 +77,7 @@ def audit(repo_dir: Path) -> list[Finding]:
                 except Exception:
                     same = False
                 content_note = (
-                    "The content is identical."
-                    if same
-                    else "The content differs; keep a single source of truth."
+                    "The content is identical." if same else "The content differs; keep a single source of truth."
                 )
                 findings.append(
                     Finding(

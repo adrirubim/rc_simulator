@@ -575,9 +575,7 @@ class MainWindow(QMainWindow):
         # Not connected.
         if not self.cars:
             self.mid_state_title.setText("No cars")
-            self.mid_state_body.setText(
-                "Run a scan to find cars on the network. Then select a car and press Connect."
-            )
+            self.mid_state_body.setText("Run a scan to find cars on the network. Then select a car and press Connect.")
             self.mid_state.setVisible(True)
             return
 
