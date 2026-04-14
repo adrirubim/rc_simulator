@@ -11,38 +11,40 @@ def build_qss(*, theme: str = "slate", density: str = "normal") -> str:
     if density not in ("normal", "compact"):
         density = "normal"
 
-    bg = "#0B1220"
+    # Obsidian base (avoid pure black).
+    bg = "#0F172A"
     text = "rgba(226, 232, 240, 0.96)"
     text_strong = "rgba(226, 232, 240, 0.98)"
     muted = "rgba(148, 163, 184, 0.82)"
-    border = "rgba(148, 163, 184, 0.22)"
-    border_soft = "rgba(148, 163, 184, 0.18)"
-    border_dim = "rgba(148, 163, 184, 0.20)"
-    border_dimmer = "rgba(148, 163, 184, 0.16)"
-    border_hover = "rgba(148, 163, 184, 0.30)"
-    border_pressed = "rgba(148, 163, 184, 0.26)"
+    border = "rgba(148, 163, 184, 0.18)"
+    border_soft = "rgba(148, 163, 184, 0.14)"
+    border_dim = "rgba(148, 163, 184, 0.16)"
+    border_dimmer = "rgba(148, 163, 184, 0.12)"
+    border_hover = "rgba(148, 163, 184, 0.26)"
+    border_pressed = "rgba(148, 163, 184, 0.22)"
     text_disabled = "rgba(148, 163, 184, 0.55)"
     border_disabled = "rgba(148, 163, 184, 0.14)"
-    fill_hover = "rgba(148, 163, 184, 0.08)"
-    title_bg = "rgba(2, 6, 23, 0.55)"
-    surface_disabled = "rgba(30, 41, 59, 0.18)"
+    fill_hover = "rgba(148, 163, 184, 0.07)"
+    title_bg = "rgba(2, 6, 23, 0.32)"
+    surface_disabled = "rgba(30, 41, 59, 0.14)"
 
     # "Glass" is implemented as translucency + subtle borders (portable).
     if theme == "glass":
         tooltip_bg = "rgba(11, 18, 32, 0.72)"
         menu_bg = "rgba(11, 18, 32, 0.78)"
-        surface_weak = "rgba(30, 41, 59, 0.18)"
-        surface = "rgba(30, 41, 59, 0.26)"
-        surface_strong = "rgba(30, 41, 59, 0.34)"
-        button_top = "rgba(51, 65, 85, 0.52)"
-        button_bottom = "rgba(11, 18, 32, 0.52)"
-        button_hover_top = "rgba(71, 85, 105, 0.60)"
-        button_hover_bottom = "rgba(11, 18, 32, 0.60)"
-        button_pressed_top = "rgba(15, 23, 42, 0.78)"
-        button_pressed_bottom = "rgba(2, 6, 23, 0.78)"
+        surface_weak = "rgba(15, 23, 42, 0.16)"
+        surface = "rgba(15, 23, 42, 0.20)"
+        surface_strong = "rgba(15, 23, 42, 0.26)"
+        # Flat buttons (gradients reserved for primary).
+        button_top = "rgba(15, 23, 42, 0.20)"
+        button_bottom = "rgba(15, 23, 42, 0.20)"
+        button_hover_top = "rgba(15, 23, 42, 0.26)"
+        button_hover_bottom = "rgba(15, 23, 42, 0.26)"
+        button_pressed_top = "rgba(2, 6, 23, 0.32)"
+        button_pressed_bottom = "rgba(2, 6, 23, 0.32)"
         banner_bg = "rgba(11, 18, 32, 0.62)"
-        chip_bg = "rgba(30, 41, 59, 0.34)"
-        progress_bg = "rgba(2, 6, 23, 0.60)"
+        chip_bg = "rgba(15, 23, 42, 0.10)"
+        progress_bg = "rgba(2, 6, 23, 0.38)"
         splash_bg = "rgba(11, 18, 32, 0.72)"
         overlay_bg = "rgba(11, 18, 32, 0.42)"
         scrollbar_handle = "rgba(148, 163, 184, 0.18)"
@@ -50,18 +52,19 @@ def build_qss(*, theme: str = "slate", density: str = "normal") -> str:
     else:
         tooltip_bg = "rgba(11, 18, 32, 0.92)"
         menu_bg = "rgba(11, 18, 32, 0.94)"
-        surface_weak = "rgba(30, 41, 59, 0.22)"
-        surface = "rgba(30, 41, 59, 0.28)"
-        surface_strong = "rgba(30, 41, 59, 0.50)"
-        button_top = "rgba(51, 65, 85, 0.72)"
-        button_bottom = "rgba(15, 23, 42, 0.72)"
-        button_hover_top = "rgba(71, 85, 105, 0.78)"
-        button_hover_bottom = "rgba(15, 23, 42, 0.78)"
-        button_pressed_top = "rgba(15, 23, 42, 0.92)"
-        button_pressed_bottom = "rgba(2, 6, 23, 0.92)"
+        surface_weak = "rgba(15, 23, 42, 0.16)"
+        surface = "rgba(15, 23, 42, 0.20)"
+        surface_strong = "rgba(15, 23, 42, 0.26)"
+        # Flat buttons (gradients reserved for primary).
+        button_top = "rgba(15, 23, 42, 0.20)"
+        button_bottom = "rgba(15, 23, 42, 0.20)"
+        button_hover_top = "rgba(15, 23, 42, 0.26)"
+        button_hover_bottom = "rgba(15, 23, 42, 0.26)"
+        button_pressed_top = "rgba(2, 6, 23, 0.32)"
+        button_pressed_bottom = "rgba(2, 6, 23, 0.32)"
         banner_bg = "rgba(11, 18, 32, 0.78)"
-        chip_bg = "rgba(30, 41, 59, 0.60)"
-        progress_bg = "rgba(2, 6, 23, 0.75)"
+        chip_bg = "rgba(15, 23, 42, 0.10)"
+        progress_bg = "rgba(2, 6, 23, 0.38)"
         splash_bg = "rgba(11, 18, 32, 0.88)"
         overlay_bg = "rgba(11, 18, 32, 0.55)"
         scrollbar_handle = "rgba(148, 163, 184, 0.24)"
@@ -178,6 +181,14 @@ QWidget {
   font-size: @FONT_BASE@;
 }
 
+QLabel[label="true"] {
+  color: rgba(226, 232, 240, 0.60);
+}
+
+QLabel[mono="true"] {
+  font-family: "Cascadia Mono", "Consolas";
+}
+
 QMainWindow::separator {
   background: @BORDER_SOFT@;
   width: 1px;
@@ -189,25 +200,25 @@ QToolTip {
   background: @TOOLTIP_BG@;
   color: @TEXT_STRONG@;
   border: 1px solid @BORDER@;
-  border-radius: 12px;
+  border-radius: @RADIUS_LG@;
   padding: @PAD_SM@;
 }
 QMenu {
   background: @MENU_BG@;
   border: 1px solid @BORDER@;
-  border-radius: 12px;
+  border-radius: @RADIUS_LG@;
   padding: 6px;
 }
 QMenu::item {
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: @RADIUS_MD@;
 }
 QMenu::item:selected {
   background: @ACCENT_16@;
 }
 
 /* ---------- Focus ---------- */
-QLineEdit:focus, QTextEdit:focus, QListWidget:focus, QPushButton:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QListWidget:focus, QPushButton:focus {
   outline: none;
 }
 
@@ -241,30 +252,41 @@ QTextEdit:focus {
   background: @SURFACE@;
 }
 
+QPlainTextEdit {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER@;
+  border-radius: @RADIUS_MD@;
+  padding: @PAD_MD@;
+}
+QPlainTextEdit:hover {
+  border: 1px solid @BORDER_HOVER@;
+}
+QPlainTextEdit:focus {
+  border: 1px solid @ACCENT_60@;
+  background: @SURFACE@;
+}
+
+/* Log view: readable + mono */
+QPlainTextEdit#logView {
+  font-family: "Cascadia Mono", "Consolas";
+  font-size: @FONT_MONO@;
+}
+
 /* ---------- Buttons (High-tech) ---------- */
 QPushButton {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-    stop:0 @BUTTON_TOP@,
-    stop:1 @BUTTON_BOTTOM@
-  );
+  background: @BUTTON_TOP@;
   border: 1px solid @BORDER@;
   border-radius: @RADIUS_MD@;
   padding: @PAD_BTN@;
-  font-weight: 650;
+  font-weight: 600;
   min-height: @BTN_MIN_H@;
 }
 QPushButton:hover {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-    stop:0 @BUTTON_HOVER_TOP@,
-    stop:1 @BUTTON_HOVER_BOTTOM@
-  );
+  background: @BUTTON_HOVER_TOP@;
   border: 1px solid @BORDER_HOVER@;
 }
 QPushButton:pressed {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-    stop:0 @BUTTON_PRESSED_TOP@,
-    stop:1 @BUTTON_PRESSED_BOTTOM@
-  );
+  background: @BUTTON_PRESSED_TOP@;
   border: 1px solid @BORDER_PRESSED@;
 }
 QPushButton:checked {
@@ -358,7 +380,7 @@ QPushButton#bannerClose:pressed {
 /* ---------- Lists ---------- */
 QListWidget {
   background: @SURFACE_WEAK@;
-  border: 1px solid @BORDER_DIM@;
+  border: none;
   border-radius: @RADIUS_LG@;
   padding: @LIST_PAD@;
 }
@@ -368,7 +390,7 @@ QListWidget::item {
 }
 QListWidget::item:selected {
   background: @ACCENT_10@;
-  border: 1px solid @ACCENT_22@;
+  border: none;
 }
 QListWidget::item:hover {
   background: @FILL_HOVER@;
@@ -386,10 +408,22 @@ QWidget#carRow:hover {
 }
 QWidget#carRow[active="true"] {
   border: 2px solid @ACCENT_70@;
+  border-bottom: 2px solid @ACCENT_SOLID@;
   background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
     stop:0 @ACCENT_16@,
     stop:1 @SURFACE_STRONG@
   );
+}
+
+
+/* Connected pill in car list (minimal, readable) */
+QLabel#carConnectedPill {
+  background: @CHIP_BG@;
+  border: 1px solid {ok_border};
+  color: @OK_TEXT@;
+  border-radius: 999px;
+  padding: @PAD_CHIP@;
+  font-weight: 800;
 }
 
 /* ---------- Dock ---------- */
@@ -400,12 +434,12 @@ QDockWidget {
 QDockWidget::title {
   background: @TITLE_BG@;
   padding: 10px 12px;
-  border: 1px solid @BORDER_SOFT@;
-  border-bottom: none;
+  border: none;
+  border-bottom: 1px solid @BORDER_SOFT@;
   font-weight: 800;
 }
 QDockWidget::widget {
-  border: 1px solid @BORDER_SOFT@;
+  border: none;
   background: @SURFACE@;
 }
 
@@ -413,6 +447,30 @@ QDockWidget::widget {
 QLabel#title {
   font-size: @FONT_TITLE@;
   font-weight: 900;
+}
+
+/* ---------- Enterprise title bar (frameless chrome) ---------- */
+QWidget#titleBar {
+  background: rgba(2, 6, 23, 0.20);
+  border: none;
+  border-bottom: 1px solid @BORDER_SOFT@;
+}
+QPushButton#windowMin, QPushButton#windowMax, QPushButton#windowClose {
+  background: transparent;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: @RADIUS_LG@;
+  padding: 6px 10px;
+  min-width: 34px;
+  min-height: 30px;
+  font-weight: 700;
+}
+QPushButton#windowMin:hover, QPushButton#windowMax:hover {
+  background: @FILL_HOVER@;
+  border: 1px solid @BORDER_HOVER@;
+}
+QPushButton#windowClose:hover {
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.35);
 }
 QLabel#muted {
   color: @MUTED@;
@@ -429,7 +487,7 @@ QLabel#logText {
 
 /* ---------- Banner ---------- */
 #banner {
-  border-radius: 12px;
+  border-radius: @RADIUS_LG@;
   border: 1px solid @BORDER_DIM@;
   background: @BANNER_BG@;
 }
@@ -452,14 +510,17 @@ QLabel#logText {
 
 /* ---------- Badges (chips) ---------- */
 QLabel[badge="true"] {
-  padding: @PAD_CHIP@;
+  /* HUD backplate: keep readable over bright video feeds */
+  background: rgba(15, 23, 42, 0.55);
+  padding: 2px 6px;
+  border-radius: 4px;
   min-height: @BADGE_MIN_H@;
-  border-radius: 999px;
-  background: @CHIP_BG@;
-  border: 1px solid @BORDER_DIMMER@;
+  border: none;
+  border-left: 8px solid @BORDER_DIMMER@;
+  font-weight: 600;
 }
 /* ---------- Focus ring (visible) ---------- */
-QLineEdit:focus, QTextEdit:focus, QListWidget:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QListWidget:focus {
   border: 1px solid @ACCENT_65@;
 }
 QPushButton:focus {
@@ -477,24 +538,19 @@ QLabel[badgeKind="danger"] { color: @DANGER_TEXT@; }
 QLabel[badgeKind="muted"] { color: @MUTED_TEXT@; }
 QLabel[badgeKind="accent"] { color: @ACCENT_TEXT@; }
 QLabel[badge="true"][badgeKind="ok"] {
-  background: @OK_FILL@;
-  border: 1px solid {ok_border};
+  border-left: 8px solid {ok_border};
 }
 QLabel[badge="true"][badgeKind="warn"] {
-  background: @WARN_FILL@;
-  border: 1px solid {warn_border};
+  border-left: 8px solid {warn_border};
 }
 QLabel[badge="true"][badgeKind="danger"] {
-  background: @DANGER_FILL@;
-  border: 1px solid {danger_border};
+  border-left: 8px solid {danger_border};
 }
 QLabel[badge="true"][badgeKind="muted"] {
-  background: @MUTED_FILL@;
-  border: 1px solid @BORDER@;
+  border-left: 8px solid @BORDER_DIMMER@;
 }
 QLabel[badge="true"][badgeKind="accent"] {
-  background: @ACCENT_FILL@;
-  border: 1px solid @ACCENT_BORDER@;
+  border-left: 8px solid @ACCENT_BORDER@;
 }
 
 /* ---------- Mid-state card ---------- */
@@ -502,6 +558,16 @@ QWidget#midState {
   background: @SURFACE_WEAK@;
   border: 1px solid @BORDER_DIM@;
   border-radius: @RADIUS_LG@;
+}
+QWidget#midState[pulse="true"] {
+  border-bottom: 2px solid rgba(96, 165, 250, 0.65);
+}
+QWidget#midState[pulse="false"] {
+  border-bottom: 2px solid rgba(96, 165, 250, 0.0);
+}
+
+QLabel[badge="true"][pulse="true"] {
+  border-left: 8px solid rgba(96, 165, 250, 0.90);
 }
 
 /* ---------- Video overlay ---------- */
@@ -516,16 +582,31 @@ QLabel#videoOverlayTitle {
   color: @TEXT_STRONG@;
 }
 
+/* ---------- Drive guard overlay (connect-first) ---------- */
+QWidget#driveGuardOverlay {
+  background: rgba(2, 6, 23, 0.78);
+  border: 1px solid @BORDER_SOFT@;
+  border-radius: @RADIUS_LG@;
+}
+QLabel#driveGuardTitle {
+  font-size: @FONT_H2@;
+  font-weight: 900;
+  color: @TEXT_STRONG@;
+}
+
 /* ---------- Progress (Racing HUD) ---------- */
 QProgressBar {
-  background: @PROGRESS_BG@;
+  background: rgba(2, 6, 23, 0.28);
   border: 1px solid @BORDER_SOFT@;
-  border-radius: 8px;
+  border-radius: 5px;
   height: 10px;
 }
 QProgressBar::chunk {
-  background: @ACCENT_85@;
-  border-radius: 8px;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+    stop:0 rgba(147, 197, 253, 0.85),
+    stop:1 @ACCENT_70@
+  );
+  border-radius: 4px;
 }
 
 /* ---------- Splash ---------- */
@@ -563,6 +644,8 @@ QProgressBar[barKind="steer"]::chunk {
     stop:0 @STEER_STOP0@,
     stop:1 @STEER_STOP1@
   );
+  border-left: 2px solid rgba(2, 6, 23, 0.55);
+  border-right: 2px solid rgba(2, 6, 23, 0.55);
 }
 
 /* ---------- Scrollbars ---------- */
