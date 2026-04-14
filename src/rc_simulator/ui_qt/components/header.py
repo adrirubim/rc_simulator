@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
+from ..strings import UI
+
 
 @dataclass(frozen=True)
 class Header:
@@ -31,37 +33,37 @@ def build_header(
     header_l.setContentsMargins(0, 0, 0, 0)
     header_l.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-    title = QLabel("RC Simulator", header_widget)
+    title = QLabel(UI.app_title, header_widget)
     title.setObjectName("title")
     header_l.addWidget(title)
 
     header_l.addStretch(1)
 
-    badge_scan = QLabel("SCANNING", header_widget)
+    badge_scan = QLabel(UI.badge_scanning, header_widget)
     badge_scan.setProperty("badge", True)
     badge_scan.setProperty("badgeKind", "warn")
     badge_scan.setVisible(False)
     header_l.addWidget(badge_scan)
 
-    badge_conn = QLabel("DISCONNECTED", header_widget)
+    badge_conn = QLabel(UI.badge_disconnected, header_widget)
     badge_moza = QLabel("MOZA: --", header_widget)
-    badge_video = QLabel("VIDEO OFF", header_widget)
+    badge_video = QLabel(UI.badge_video_off, header_widget)
     badge_output = QLabel("+0.000", header_widget)
     for b in (badge_conn, badge_moza, badge_video, badge_output):
         b.setProperty("badge", True)
         b.setProperty("badgeKind", "muted")
         header_l.addWidget(b)
 
-    btn_drive = QPushButton("Drive", header_widget)
+    btn_drive = QPushButton(UI.drive_button, header_widget)
     btn_drive.setCheckable(True)
     btn_drive.clicked.connect(on_toggle_drive_mode)
-    btn_drive.setToolTip("Drive Mode (fullscreen). Press Esc to exit Drive Mode.")
+    btn_drive.setToolTip(UI.drive_tooltip)
     header_l.addWidget(btn_drive)
 
     btn_debug = QPushButton("Debug", header_widget)
     btn_debug.setCheckable(True)
     btn_debug.clicked.connect(on_toggle_debug_mode)
-    btn_debug.setToolTip("Dockable telemetry/trace panels (layout C).")
+    btn_debug.setToolTip(UI.debug_tooltip)
     header_l.addWidget(btn_debug)
 
     return Header(

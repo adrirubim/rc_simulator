@@ -46,6 +46,7 @@ Use these commands from the **repository root** as your main entrypoints:
 |--------|---------|-------|
 | `./scripts/dev-verify.sh` | **Full validation** (CI parity) | Creates venv if missing, installs deps, runs audit + ruff + pytest |
 | `python -m rc_simulator` | **Run the app** | Requires a GUI-capable environment (Linux desktop or WSLg) |
+| `ops/install.sh --all` | **One-command install (Linux/WSL)** | Installs launcher; installs systemd service if systemd is running |
 | `ops/linux/install_launcher.sh` | **Install desktop launcher** | Linux only (writes a `.desktop` entry) |
 
 ---

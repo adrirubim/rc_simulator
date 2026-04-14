@@ -42,6 +42,7 @@ from ..components.banner import build_banner
 from ..components.docks import build_debug_docks, build_log_dock
 from ..components.header import build_header
 from ..components.hud import build_hud
+from ..strings import UI
 
 
 @dataclass
@@ -169,7 +170,7 @@ class MainWindow(QMainWindow):
         left_l.setSpacing(6 if self.cfg.density == "compact" else 8)
 
         self.search = QLineEdit(self.left_panel)
-        self.search.setPlaceholderText("Search cars…")
+        self.search.setPlaceholderText(UI.search_placeholder)
         self.search.textChanged.connect(self._debounce_apply_car_filter)
         left_l.addWidget(self.search)
 
@@ -177,7 +178,7 @@ class MainWindow(QMainWindow):
         self.list.itemSelectionChanged.connect(self.on_select)
         left_l.addWidget(self.list, 1)
 
-        self.list_hint = QLabel("Tip: run a scan to find cars on the network.", self.left_panel)
+        self.list_hint = QLabel(UI.list_hint, self.left_panel)
         self.list_hint.setObjectName("muted")
         self.list_hint.setWordWrap(True)
         self.list_hint.setVisible(False)
@@ -186,17 +187,17 @@ class MainWindow(QMainWindow):
         btn_row = QWidget(self.left_panel)
         btn_row_l = QHBoxLayout(btn_row)
         btn_row_l.setContentsMargins(0, 0, 0, 0)
-        self.btn_scan = QPushButton("Scan", btn_row)
+        self.btn_scan = QPushButton(UI.scan_button, btn_row)
         self.btn_scan.clicked.connect(self.start_scan)
-        self.btn_scan.setToolTip("Scan the network to find cars.")
-        self.btn_connect = QPushButton("Connect", btn_row)
+        self.btn_scan.setToolTip(UI.scan_tooltip)
+        self.btn_connect = QPushButton(UI.connect_button, btn_row)
         self.btn_connect.setObjectName("primaryButton")
         self.btn_connect.clicked.connect(self.connect_selected)
-        self.btn_connect.setToolTip("Connect to the selected car (Ctrl+Enter).")
-        self.btn_disconnect = QPushButton("Disconnect", btn_row)
+        self.btn_connect.setToolTip(UI.connect_tooltip)
+        self.btn_disconnect = QPushButton(UI.disconnect_button, btn_row)
         self.btn_disconnect.setObjectName("dangerButton")
         self.btn_disconnect.clicked.connect(self.disconnect_session)
-        self.btn_disconnect.setToolTip("Disconnect the session (Esc).")
+        self.btn_disconnect.setToolTip(UI.disconnect_tooltip)
         btn_row_l.addWidget(self.btn_scan)
         btn_row_l.addWidget(self.btn_connect)
         btn_row_l.addWidget(self.btn_disconnect)
@@ -225,7 +226,7 @@ class MainWindow(QMainWindow):
             ms_l.setContentsMargins(14, 14, 14, 14)
             ms_l.setSpacing(10)
 
-        self.mid_state_title = QLabel("Ready", self.mid_state)
+        self.mid_state_title = QLabel(UI.mid_ready, self.mid_state)
         self.mid_state_title.setObjectName("title")
         self.mid_state_body = QLabel("", self.mid_state)
         self.mid_state_body.setWordWrap(True)
@@ -235,7 +236,7 @@ class MainWindow(QMainWindow):
 
         mid_l.addWidget(self.mid_state)
 
-        self.session_label = QLabel("Session status: Ready", self.mid_panel)
+        self.session_label = QLabel(UI.session_status_ready, self.mid_panel)
         self.detail_label = QLabel("", self.mid_panel)
         self.phase_progress = QProgressBar(self.mid_panel)
         self.phase_progress.setRange(0, 0)
@@ -243,12 +244,12 @@ class MainWindow(QMainWindow):
         self.phase_progress.setFixedHeight(10)
         self.phase_progress.setVisible(False)
 
-        self.telemetry_label = QLabel("Session inactive", self.mid_panel)
+        self.telemetry_label = QLabel(UI.session_inactive, self.mid_panel)
         self.telemetry_label.setWordWrap(True)
         mid_l.addWidget(self.session_label)
         mid_l.addWidget(self.detail_label)
         mid_l.addWidget(self.phase_progress)
-        mid_l.addWidget(QLabel("Live video (embedded in Qt):", self.mid_panel))
+        mid_l.addWidget(QLabel(UI.live_video_label, self.mid_panel))
 
         self.video_container = QWidget(self.mid_panel)
         self.video_container.setMinimumHeight(240)
@@ -256,7 +257,7 @@ class MainWindow(QMainWindow):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(0)
 
-        self.video_view = QLabel("Video: not available", self.video_container)
+        self.video_view = QLabel(UI.video_not_available, self.video_container)
         self.video_view.setAlignment(Qt.AlignCenter)
         grid.addWidget(self.video_view, 0, 0, 1, 1)
 
@@ -288,18 +289,18 @@ class MainWindow(QMainWindow):
         self.video_overlay.setVisible(True)
         grid.addWidget(self.video_overlay, 0, 0, 1, 1)
 
-        self.btn_video_help = QPushButton("Video requirements", self.video_container)
+        self.btn_video_help = QPushButton(UI.video_requirements_button, self.video_container)
         self.btn_video_help.setObjectName("secondaryButton")
         self.btn_video_help.clicked.connect(self._show_video_requirements_hint)
-        self.btn_video_help.setToolTip("Show what to install for embedded video.")
+        self.btn_video_help.setToolTip(UI.video_requirements_tooltip)
         self.btn_video_help.setVisible(False)
         grid.addWidget(self.btn_video_help, 0, 0, 1, 1, alignment=Qt.AlignBottom | Qt.AlignRight)
 
-        self.btn_overlay_disconnect = QPushButton("DISCONNECT", self.video_container)
+        self.btn_overlay_disconnect = QPushButton(UI.overlay_disconnect_button, self.video_container)
         self.btn_overlay_disconnect.setObjectName("dangerButton")
         self.btn_overlay_disconnect.clicked.connect(self.disconnect_session)
         self.btn_overlay_disconnect.setVisible(False)
-        self.btn_overlay_disconnect.setToolTip("Disconnect now (Esc).")
+        self.btn_overlay_disconnect.setToolTip(UI.overlay_disconnect_tooltip)
         grid.addWidget(self.btn_overlay_disconnect, 0, 0, 1, 1, alignment=Qt.AlignTop | Qt.AlignRight)
         self.btn_overlay_disconnect.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
 
@@ -320,7 +321,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.drive_banner, 0, 0, 1, 1, alignment=Qt.AlignBottom | Qt.AlignHCenter)
 
         mid_l.addWidget(self.video_container, 1)
-        mid_l.addWidget(QLabel("Telemetry:", self.mid_panel))
+        mid_l.addWidget(QLabel(UI.telemetry_label, self.mid_panel))
         mid_l.addWidget(self.telemetry_label)
 
         center_l.addWidget(self.mid_panel, 1)
@@ -847,8 +848,6 @@ class MainWindow(QMainWindow):
 
     # ---------------- Rate-limited logging ----------------
     def _append_log_rate_limited(self, level: str, text: str, *, key: str, min_interval_ms: int) -> None:
-        import time
-
         t_ms = int(time.time() * 1000)
         if key == "video-error":
             if self._video_last_error == text and (t_ms - self._video_last_error_ts_ms) < min_interval_ms:

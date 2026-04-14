@@ -1,0 +1,29 @@
+[#] Template unit file for RC Simulator (MOZA UDP Client)
+[#] This file is not installed directly. Use:
+[#]   ops/linux/install_service.sh --user <username>
+[#]
+[#] Placeholders:
+[#]   @USER@        system user to run the service as
+[#]   @DISPLAY@     X/Wayland display value (default :0)
+[#]   @XAUTHORITY@  XAUTHORITY path (default %h/.Xauthority)
+[#]   @PYTHON@      python executable path (default /usr/bin/python3)
+
+[Unit]
+Description=RC Simulator (MOZA UDP Client)
+After=graphical.target network.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=%h
+Environment=DISPLAY=@DISPLAY@
+Environment=XAUTHORITY=@XAUTHORITY@
+Environment=QT_X11_NO_MITSHM=1
+ExecStart=@PYTHON@ -m rc_simulator
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+
