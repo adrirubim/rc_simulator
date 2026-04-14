@@ -18,7 +18,7 @@ DISCOVERY_STALE_S = 3.0
 DEFAULT_CONTROL_PORT = 5005
 
 
-def discover_cars(timeout_s: float = DISCOVERY_TIMEOUT_S) -> dict[str, Car]:
+def discover_cars(*, timeout_s: float = DISCOVERY_TIMEOUT_S, stop_event=None) -> dict[str, Car]:
     """
     Listen for UDP broadcast beacons and build a list of live cars.
     Returns a dict keyed by car_id.
@@ -34,6 +34,13 @@ def discover_cars(timeout_s: float = DISCOVERY_TIMEOUT_S) -> dict[str, Car]:
         t0 = time.time()
 
         while time.time() - t0 < timeout_s:
+            if stop_event is not None:
+                try:
+                    if stop_event.is_set():
+                        break
+                except Exception:
+                    # Best-effort: if the event is misbehaving, keep discovery functional.
+                    pass
             try:
                 data, addr = sock.recvfrom(4096)
                 msg = json.loads(data.decode("utf-8", errors="ignore"))

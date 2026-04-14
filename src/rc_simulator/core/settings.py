@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings
-
-ORG = "rc-simulator"
-APP = "rc-simulator-frontend"
+from typing import Any, Protocol
 
 
-def make_settings() -> QSettings:
-    return QSettings(ORG, APP)
+class SettingsStore(Protocol):
+    def value(self, key: str, defaultValue: Any | None = None) -> Any: ...
+
+    def setValue(self, key: str, value: Any) -> None: ...

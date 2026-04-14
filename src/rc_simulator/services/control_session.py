@@ -3,6 +3,7 @@ from __future__ import annotations
 import select
 import socket
 import time
+from pathlib import Path
 from typing import Any
 
 from evdev import InputDevice, ecodes
@@ -43,6 +44,23 @@ SEND_HZ_DEFAULT = 120
 # deadzone
 STEER_DEADZONE_DEFAULT = 0.02
 PEDAL_DEADZONE_DEFAULT = 0.02
+
+
+def _list_input_candidates() -> list[str]:
+    out: list[str] = []
+    for p in sorted(Path("/dev/input/by-id").glob("*event*")):
+        out.append(str(p))
+        if len(out) >= 12:
+            return out
+    for p in sorted(Path("/dev/input/by-path").glob("*event*")):
+        out.append(str(p))
+        if len(out) >= 12:
+            return out
+    for p in sorted(Path("/dev/input").glob("event*")):
+        out.append(str(p))
+        if len(out) >= 12:
+            return out
+    return out
 
 
 def open_moza_device(dev_path: str) -> tuple[InputDevice, dict[int, Any]]:
@@ -89,6 +107,7 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
         cfg = load_config()
 
         dev_path = str(getattr(cfg, "moza_dev_path", "")) or "/dev/input/event0"
+        allow_no_moza = bool(getattr(cfg, "allow_no_moza", False))
         send_hz = int(getattr(cfg, "control_send_hz", SEND_HZ_DEFAULT) or SEND_HZ_DEFAULT)
         send_hz = max(1, min(send_hz, 1000))
         send_dt = 1.0 / float(send_hz)
@@ -102,25 +121,68 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
         steer_deadzone = float(getattr(cfg, "steer_deadzone", STEER_DEADZONE_DEFAULT) or STEER_DEADZONE_DEFAULT)
         pedal_deadzone = float(getattr(cfg, "pedal_deadzone", PEDAL_DEADZONE_DEFAULT) or PEDAL_DEADZONE_DEFAULT)
 
-        dev, abs_map = open_moza_device(dev_path)
-        ui_queue.put(MozaStateEvent(connected=True))
-        ui_queue.put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"))
+        abs_map: dict[int, Any] | None = None
+        try:
+            dev, abs_map = open_moza_device(dev_path)
+            ui_queue.put(MozaStateEvent(connected=True))
+            ui_queue.put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"))
+        except FileNotFoundError as e:
+            ui_queue.put(MozaStateEvent(connected=False))
+            candidates = _list_input_candidates()
+            if candidates:
+                ui_queue.put(LogEvent(level="INFO", message="Input candidates:\n- " + "\n- ".join(candidates)))
+            if not allow_no_moza:
+                raise FileNotFoundError(
+                    f"MOZA device not found at {dev_path!r}. Set RC_UI_MOZA_DEV_PATH to one of:\n- "
+                    + "\n- ".join(candidates or ["(no /dev/input candidates found)"])
+                ) from e
+            ui_queue.put(
+                LogEvent(
+                    level="WARN",
+                    message=(
+                        f"MOZA device not found at {dev_path!r}. Running in no-input mode. "
+                        "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
+                    ),
+                )
+            )
+            ui_queue.put(LogEvent(level="DEBUG", message=f"MOZA open error: {e}"))
+        except Exception as e:
+            ui_queue.put(MozaStateEvent(connected=False))
+            if not allow_no_moza:
+                raise
+            ui_queue.put(
+                LogEvent(
+                    level="WARN",
+                    message=(
+                        f"MOZA init failed ({e}). Running in no-input mode. "
+                        "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
+                    ),
+                )
+            )
 
         steer = 0.0
         gas01 = 0.0
         brake01 = 0.0
 
-        steer_info = abs_map[STEER_CODE]
-        steer_min = int(steer_info.min)
-        steer_max = int(steer_info.max)
-
-        unwrapper = SteerUnwrapper(steer_min=steer_min, steer_max=steer_max, wrap_jump_frac=WRAP_JUMP_FRAC)
+        if abs_map is not None:
+            steer_info = abs_map[STEER_CODE]
+            steer_min = int(steer_info.min)
+            steer_max = int(steer_info.max)
+            unwrapper = SteerUnwrapper(steer_min=steer_min, steer_max=steer_max, wrap_jump_frac=WRAP_JUMP_FRAC)
+        else:
+            steer_min = -1
+            steer_max = 1
+            unwrapper = None
 
         last_send = 0.0
         last_ui = 0.0
 
         while not stop_event.is_set():
-            readable, _, _ = select.select([dev.fd], [], [], 0.02)
+            if dev is not None:
+                readable, _, _ = select.select([dev.fd], [], [], 0.02)
+            else:
+                readable = []
+                time.sleep(0.02)
 
             if readable:
                 for event in dev.read():
@@ -131,6 +193,8 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
                     val = int(event.value)
 
                     if code == STEER_CODE:
+                        if unwrapper is None:
+                            continue
                         val_wrapped = unwrapper.update(val)
                         s = norm_axis(val_wrapped, steer_min, steer_max, invert=steer_invert)
                         s = apply_deadzone(s, steer_deadzone)
