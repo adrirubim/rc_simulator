@@ -108,26 +108,33 @@ class GstVideoReceiver(VideoReceiver):
             self._stop_bus.clear()
 
             def _bus_watch() -> None:
-                try:
-                    if self._bus is None:
+                def _emit_error(msg: str) -> None:
+                    # Suppress errors during shutdown to avoid noisy logs on app close.
+                    if self._stop_bus.is_set() or (not self._running):
                         return
+                    self.on_error(msg)
+
+                try:
                     mask = Gst.MessageType.ERROR | Gst.MessageType.EOS
                     while not self._stop_bus.is_set() and self._running and self._pipeline is pipeline:
-                        msg = self._bus.timed_pop_filtered(50 * Gst.MSECOND, mask)
+                        bus = self._bus
+                        if bus is None:
+                            break
+                        msg = bus.timed_pop_filtered(50 * Gst.MSECOND, mask)
                         if msg is None:
                             continue
                         if msg.type == Gst.MessageType.EOS:
-                            self.on_error("Video: stream ended (EOS).")
+                            _emit_error("Video: stream ended (EOS).")
                             break
                         if msg.type == Gst.MessageType.ERROR:
                             err, dbg = msg.parse_error()
                             details = f"{err}"
                             if dbg:
                                 details = f"{details} ({dbg})"
-                            self.on_error(f"Video: GStreamer error: {details}")
+                            _emit_error(f"Video: GStreamer error: {details}")
                             break
                 except Exception as e:
-                    self.on_error(f"Video: bus monitor error: {e}")
+                    _emit_error(f"Video: bus monitor error: {e}")
                 finally:
                     # Best-effort cleanup; UI side handles retry scheduling.
                     try:
