@@ -56,6 +56,8 @@ def audit(repo_dir: Path) -> list[Finding]:
     egg_info_candidates = list(repo_dir.glob("src/*.egg-info")) + list(repo_dir.glob("src/**/*.egg-info"))
     egg_info = sorted({p.resolve() for p in egg_info_candidates})
     if egg_info:
+        # Editable installs with setuptools often create `src/<project>.egg-info` in-tree.
+        # This is annoying but common; treat it as a warning (not a hard error).
         findings.append(
             Finding(
                 "WARN",

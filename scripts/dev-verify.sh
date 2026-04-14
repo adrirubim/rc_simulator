@@ -13,8 +13,6 @@ source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -e ".[dev]"
 
-# Editable installs can leave build artifacts in-tree (notably `*.egg-info` under `src/`).
-# Keep the repo clean before running the layout audit.
 rm -rf src/*.egg-info src/**/*.egg-info 2>/dev/null || true
 
 python3 scripts/audit_layout.py
