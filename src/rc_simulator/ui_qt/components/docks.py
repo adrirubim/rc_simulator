@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMainWindow,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QTextEdit,
@@ -25,9 +25,66 @@ from ..strings import UI
 class LogDock:
     dock: QDockWidget
     filter: QLineEdit
-    view: QListWidget
+    view: QPlainTextEdit
     pause_button: QPushButton
     clear_button: QPushButton
+
+
+@dataclass(frozen=True)
+class LogPanel:
+    widget: QWidget
+    filter: QLineEdit
+    view: QPlainTextEdit
+    pause_button: QPushButton
+    clear_button: QPushButton
+
+
+def build_log_panel(
+    *,
+    parent: QWidget,
+    on_filter_changed: Callable[[], None],
+    on_pause_toggled: Callable[[bool], None],
+    on_clear_clicked: Callable[[], None],
+) -> LogPanel:
+    wrap = QWidget(parent)
+    wrap.setObjectName("systemLogPanel")
+    panel_l = QVBoxLayout(wrap)
+    panel_l.setContentsMargins(0, 0, 0, 0)
+    panel_l.setSpacing(8)
+
+    title = QLabel(UI.log_dock_title, wrap)
+    title.setObjectName("title")
+    panel_l.addWidget(title)
+
+    filter_edit = QLineEdit(wrap)
+    filter_edit.setPlaceholderText(UI.log_filter_placeholder)
+    filter_edit.textChanged.connect(lambda _t: on_filter_changed())
+    panel_l.addWidget(filter_edit)
+
+    view = QPlainTextEdit(wrap)
+    view.setObjectName("logView")
+    view.setReadOnly(True)
+    view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+    panel_l.addWidget(view, 1)
+
+    log_btns = QWidget(wrap)
+    log_btns_l = QHBoxLayout(log_btns)
+    log_btns_l.setContentsMargins(0, 0, 0, 0)
+
+    pause_btn = QPushButton(UI.log_pause, log_btns)
+    pause_btn.setCheckable(True)
+    pause_btn.toggled.connect(on_pause_toggled)
+    pause_btn.setToolTip(UI.log_pause_tooltip)
+
+    clear_btn = QPushButton(UI.log_clear, log_btns)
+    clear_btn.clicked.connect(on_clear_clicked)
+    clear_btn.setToolTip(UI.log_clear_tooltip)
+
+    log_btns_l.addWidget(pause_btn)
+    log_btns_l.addWidget(clear_btn)
+    panel_l.addWidget(log_btns)
+
+    return LogPanel(widget=wrap, filter=filter_edit, view=view, pause_button=pause_btn, clear_button=clear_btn)
 
 
 @dataclass(frozen=True)
@@ -53,44 +110,30 @@ def build_log_dock(
     dock.setObjectName("log_dock")
     dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
 
-    dock_body = QWidget(dock)
-    dock_l = QVBoxLayout(dock_body)
-    dock_l.setContentsMargins(8, 8, 8, 8)
-    dock_l.setSpacing(8)
-
-    filter_edit = QLineEdit(dock_body)
-    filter_edit.setPlaceholderText(UI.log_filter_placeholder)
-    filter_edit.textChanged.connect(lambda _t: on_filter_changed())
-    dock_l.addWidget(filter_edit)
-
-    view = QListWidget(dock_body)
-    dock_l.addWidget(view, 1)
-
-    log_btns = QWidget(dock_body)
-    log_btns_l = QHBoxLayout(log_btns)
-    log_btns_l.setContentsMargins(0, 0, 0, 0)
-
-    pause_btn = QPushButton(UI.log_pause, log_btns)
-    pause_btn.setCheckable(True)
-    pause_btn.toggled.connect(on_pause_toggled)
-    pause_btn.setToolTip(UI.log_pause_tooltip)
-
-    clear_btn = QPushButton(UI.log_clear, log_btns)
-    clear_btn.clicked.connect(on_clear_clicked)
-    clear_btn.setToolTip(UI.log_clear_tooltip)
-
-    log_btns_l.addWidget(pause_btn)
-    log_btns_l.addWidget(clear_btn)
-    dock_l.addWidget(log_btns)
-
+    panel = build_log_panel(
+        parent=dock,
+        on_filter_changed=on_filter_changed,
+        on_pause_toggled=on_pause_toggled,
+        on_clear_clicked=on_clear_clicked,
+    )
+    dock_body = panel.widget
+    dock_l = dock_body.layout()
+    if isinstance(dock_l, QVBoxLayout):
+        dock_l.setContentsMargins(8, 8, 8, 8)
     dock.setWidget(dock_body)
     main_window.addDockWidget(Qt.RightDockWidgetArea, dock)
 
-    return LogDock(dock=dock, filter=filter_edit, view=view, pause_button=pause_btn, clear_button=clear_btn)
+    return LogDock(
+        dock=dock,
+        filter=panel.filter,
+        view=panel.view,
+        pause_button=panel.pause_button,
+        clear_button=panel.clear_button,
+    )
 
 
 def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
-    telemetry_dock = QDockWidget("Telemetry (debug)", main_window)
+    telemetry_dock = QDockWidget("Telemetry", main_window)
     telemetry_dock.setObjectName("telemetry_dock")
     telemetry_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
 
@@ -100,6 +143,7 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
     t_l.setSpacing(8)
 
     t_out = QLabel("Output: +0.000", t_body)
+    t_out.setProperty("label", True)
     t_l.addWidget(t_out)
 
     def _make_bar(label: str) -> tuple[QLabel, QProgressBar]:
@@ -108,6 +152,7 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
         wl.setContentsMargins(0, 0, 0, 0)
         wl.setSpacing(4)
         lab = QLabel(label, wrap)
+        lab.setProperty("label", True)
         bar = QProgressBar(wrap)
         bar.setRange(0, 1000)
         bar.setValue(0)
@@ -132,7 +177,7 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
     telemetry_dock.setWidget(t_body)
     main_window.addDockWidget(Qt.BottomDockWidgetArea, telemetry_dock)
 
-    trace_dock = QDockWidget("Trace (raw)", main_window)
+    trace_dock = QDockWidget("Trace", main_window)
     trace_dock.setObjectName("trace_dock")
     trace_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
