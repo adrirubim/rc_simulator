@@ -10,20 +10,17 @@
 
 [Unit]
 Description=RC Simulator (MOZA UDP Client)
-After=graphical.target network.target
-Wants=graphical.target
+After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=@USER@
 WorkingDirectory=%h
-Environment=DISPLAY=@DISPLAY@
-Environment=XAUTHORITY=@XAUTHORITY@
-Environment=QT_X11_NO_MITSHM=1
-ExecStart=@PYTHON@ -m rc_simulator
+ExecStart=@PYTHON@ -m rc_simulator.__main_headless__
 Restart=on-failure
 RestartSec=2
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 
