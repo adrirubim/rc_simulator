@@ -133,7 +133,7 @@ def build_log_dock(
 
 
 def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
-    telemetry_dock = QDockWidget("Telemetry", main_window)
+    telemetry_dock = QDockWidget(UI.debug_telemetry_dock_title, main_window)
     telemetry_dock.setObjectName("telemetry_dock")
     telemetry_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
 
@@ -142,7 +142,7 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
     t_l.setContentsMargins(8, 8, 8, 8)
     t_l.setSpacing(8)
 
-    t_out = QLabel("Output: +0.000", t_body)
+    t_out = QLabel(UI.debug_output_label.format(value="+0.000"), t_body)
     t_out.setProperty("label", True)
     t_l.addWidget(t_out)
 
@@ -162,9 +162,9 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
         t_l.addWidget(wrap)
         return lab, bar
 
-    _steer_lab, steer_bar = _make_bar("Steering (abs)")
-    _gas_lab, gas_bar = _make_bar("Throttle")
-    _brake_lab, brake_bar = _make_bar("Brake")
+    _steer_lab, steer_bar = _make_bar(UI.debug_steering_label)
+    _gas_lab, gas_bar = _make_bar(UI.debug_throttle_label)
+    _brake_lab, brake_bar = _make_bar(UI.debug_brake_label)
     steer_bar.setProperty("barKind", "steer")
     gas_bar.setProperty("barKind", "gas")
     brake_bar.setProperty("barKind", "brake")
@@ -177,7 +177,7 @@ def build_debug_docks(*, main_window: QMainWindow) -> DebugDocks:
     telemetry_dock.setWidget(t_body)
     main_window.addDockWidget(Qt.BottomDockWidgetArea, telemetry_dock)
 
-    trace_dock = QDockWidget("Trace", main_window)
+    trace_dock = QDockWidget(UI.debug_trace_dock_title, main_window)
     trace_dock.setObjectName("trace_dock")
     trace_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 

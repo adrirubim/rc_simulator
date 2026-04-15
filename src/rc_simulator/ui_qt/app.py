@@ -52,7 +52,8 @@ def _run_qt() -> None:
     cfg = load_config()
     app = QApplication([])
     app.setStyleSheet(build_qss(theme=cfg.theme, density=cfg.density))
-    app.setFont(QFont("Segoe UI", 10))
+    # Let QSS own font sizing; set only a best-effort family fallback.
+    app.setFont(QFont("Segoe UI"))
 
     splash = SplashScreen()
     splash.show()

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import queue
-import threading
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from importlib import metadata
 
 from PySide6.QtCore import QEasingCurve, Qt, QTimer, QVariantAnimation
 from PySide6.QtGui import QGuiApplication, QImage, QKeyEvent, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -18,12 +21,15 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSpinBox,
     QSplitter,
     QStyle,
     QVBoxLayout,
     QWidget,
 )
 
+from ...app.ports import SessionControllerPort
 from ...core.config import load_config
 from ...core.events import (
     CarsEvent,
@@ -44,22 +50,11 @@ from ..components.docks import build_debug_docks, build_log_panel
 from ..components.header import build_header
 from ..components.hud import build_hud, format_moza_badge
 from ..strings import UI
+from ..styles.theme_qss import build_qss
 from ._cars_panel import CarsPanel
 from ._log_panel import LogPanel
 from ._queue_drain import drain_queue
 from ._session_panel import SessionPanel
-
-
-class SessionControllerPort(Protocol):
-    events: queue.Queue
-    scan_thread: threading.Thread | None
-    drive_thread: threading.Thread | None
-
-    def start_scan(self) -> bool: ...
-    def cancel_scan(self) -> bool: ...
-    def connect(self, car: Car) -> bool: ...
-    def disconnect(self) -> None: ...
-    def shutdown(self) -> None: ...
 
 
 @dataclass
@@ -103,6 +98,8 @@ class MainWindow(QMainWindow):
         self._video_retry_enabled = True
         self._video_last_error: str | None = None
         self._video_last_error_ts_ms: int = 0
+        self._video_retry_profile: str = "stable"
+        self._video_retry_seq: int = 0
 
         self._last_telemetry: dict = {}
         self._telemetry_trace: list[dict] = []
@@ -177,7 +174,17 @@ class MainWindow(QMainWindow):
 
     def _is_wayland(self) -> bool:
         try:
-            return "wayland" in str(QGuiApplication.platformName() or "").lower()
+            import os
+
+            platform = str(QGuiApplication.platformName() or "").lower()
+            if "wayland" in platform:
+                return True
+            # Fallbacks: more reliable on WSLg/Wayland when Qt platformName is ambiguous.
+            if str(os.environ.get("XDG_SESSION_TYPE", "") or "").lower() == "wayland":
+                return True
+            if os.environ.get("WAYLAND_DISPLAY"):
+                return True
+            return False
         except Exception:
             return False
 
@@ -240,6 +247,7 @@ class MainWindow(QMainWindow):
             parent=root,
             on_toggle_drive_mode=self.toggle_drive_mode,
             on_toggle_debug_mode=self.toggle_debug_mode,
+            on_toggle_settings_mode=self.toggle_settings_mode,
             on_minimize=self.showMinimized,
             on_maximize_restore=self._toggle_maximize_restore,
             on_close=self.close,
@@ -254,6 +262,7 @@ class MainWindow(QMainWindow):
         self.badge_output = header.badge_output
         self.btn_drive = header.btn_drive
         self.btn_debug = header.btn_debug
+        self.btn_settings = header.btn_settings
         self.btn_win_min = header.btn_min
         self.btn_win_max = header.btn_max
         self.btn_win_close = header.btn_close
@@ -261,6 +270,7 @@ class MainWindow(QMainWindow):
         # Icons (built-in, no extra deps)
         self.btn_drive.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.btn_debug.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        self.btn_settings.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
 
         root_layout.addWidget(self.header_widget)
 
@@ -489,6 +499,112 @@ class MainWindow(QMainWindow):
         mid_l.addWidget(self.telemetry_caption)
         mid_l.addWidget(self.telemetry_label)
 
+        # Settings panel (Layout D)
+        self.settings_panel = QWidget(self.mid_panel)
+        self.settings_panel.setObjectName("settingsPanel")
+        sp_l = QVBoxLayout(self.settings_panel)
+        sp_l.setContentsMargins(0, 0, 0, 0)
+        sp_l.setSpacing(10 if self.cfg.density != "compact" else 8)
+
+        settings_title = QLabel(UI.settings_title, self.settings_panel)
+        settings_title.setObjectName("title")
+        sp_l.addWidget(settings_title)
+
+        # Scrollable content keeps Settings usable in small windows.
+        settings_scroll = QScrollArea(self.settings_panel)
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        sp_l.addWidget(settings_scroll, 1)
+
+        settings_content = QWidget(settings_scroll)
+        settings_scroll.setWidget(settings_content)
+        sc_l = QVBoxLayout(settings_content)
+        sc_l.setContentsMargins(0, 0, 0, 0)
+        sc_l.setSpacing(12 if self.cfg.density != "compact" else 10)
+
+        display_box = QGroupBox(UI.settings_section_display, settings_content)
+        display_form = QFormLayout(display_box)
+        display_form.setHorizontalSpacing(12)
+        display_form.setVerticalSpacing(10)
+
+        behavior_box = QGroupBox(UI.settings_section_behavior, settings_content)
+        behavior_form = QFormLayout(behavior_box)
+        behavior_form.setHorizontalSpacing(12)
+        behavior_form.setVerticalSpacing(10)
+
+        video_box = QGroupBox(UI.settings_section_video, settings_content)
+        video_form = QFormLayout(video_box)
+        video_form.setHorizontalSpacing(12)
+        video_form.setVerticalSpacing(10)
+
+        logs_box = QGroupBox(UI.settings_section_logs, settings_content)
+        logs_form = QFormLayout(logs_box)
+        logs_form.setHorizontalSpacing(12)
+        logs_form.setVerticalSpacing(10)
+
+        self.settings_theme = QComboBox(display_box)
+        self.settings_theme.addItems(["slate", "glass"])
+        self.settings_theme.setToolTip(UI.settings_tooltip_theme)
+        self.settings_density = QComboBox(display_box)
+        self.settings_density.addItems(["normal", "compact"])
+        self.settings_density.setToolTip(UI.settings_tooltip_density)
+        self.settings_auto_scan = QCheckBox(UI.settings_auto_scan, behavior_box)
+        self.settings_auto_scan.setToolTip(UI.settings_tooltip_auto_scan)
+        self.settings_auto_connect_single = QCheckBox(UI.settings_auto_connect_single, behavior_box)
+        self.settings_auto_connect_single.setToolTip(UI.settings_tooltip_auto_connect_single)
+        self.settings_video_latency = QSpinBox(video_box)
+        self.settings_video_latency.setRange(0, 250)
+        self.settings_video_latency.setSingleStep(10)
+        self.settings_video_latency.setSuffix(" ms")
+        self.settings_video_latency.setToolTip(UI.settings_tooltip_receiver_latency)
+
+        self.settings_retry_profile = QComboBox(video_box)
+        self.settings_retry_profile.addItems(["stable", "aggressive"])
+        self.settings_retry_profile.setToolTip(UI.settings_tooltip_retry_profile)
+
+        self.settings_log_visible = QComboBox(logs_box)
+        self.settings_log_visible.addItems(["500", "2000", "5000"])
+        self.settings_log_store = QComboBox(logs_box)
+        self.settings_log_store.addItems(["5000", "20000", "50000"])
+        self.settings_log_visible.setToolTip(UI.settings_tooltip_visible_lines)
+        self.settings_log_store.setToolTip(UI.settings_tooltip_stored_lines)
+
+        display_form.addRow(UI.settings_theme_label, self.settings_theme)
+        display_form.addRow(UI.settings_density_label, self.settings_density)
+        behavior_form.addRow("", self.settings_auto_scan)
+        behavior_form.addRow("", self.settings_auto_connect_single)
+        video_form.addRow(UI.settings_receiver_latency_label, self.settings_video_latency)
+        video_form.addRow(UI.settings_retry_profile_label, self.settings_retry_profile)
+        logs_form.addRow(UI.settings_visible_lines_label, self.settings_log_visible)
+        logs_form.addRow(UI.settings_stored_lines_label, self.settings_log_store)
+
+        sc_l.addWidget(display_box)
+        sc_l.addWidget(behavior_box)
+        sc_l.addWidget(video_box)
+        sc_l.addWidget(logs_box)
+        sc_l.addStretch(1)
+
+        btn_row = QWidget(self.settings_panel)
+        btn_row_l = QHBoxLayout(btn_row)
+        btn_row_l.setContentsMargins(0, 0, 0, 0)
+        btn_row_l.addStretch(1)
+        self.settings_copy_diag = QPushButton(UI.settings_copy_diagnostics, btn_row)
+        self.settings_copy_diag.setObjectName("secondaryButton")
+        self.settings_copy_diag.clicked.connect(self._copy_diagnostics)
+        self.settings_copy_diag.setAccessibleName("Copy diagnostics")
+        self.settings_copy_diag.setAccessibleDescription("Copy system and configuration details to the clipboard")
+        btn_row_l.addWidget(self.settings_copy_diag)
+        self.settings_apply = QPushButton(UI.settings_apply, btn_row)
+        self.settings_apply.setObjectName("primaryButton")
+        self.settings_apply.clicked.connect(self._apply_settings_from_ui)
+        self.settings_apply.setAccessibleName("Apply settings")
+        self.settings_apply.setAccessibleDescription("Save settings and apply them to the application")
+        btn_row_l.addWidget(self.settings_apply)
+        sp_l.addWidget(btn_row)
+
+        self.settings_panel.setVisible(False)
+        mid_l.addWidget(self.settings_panel, 1)
+
         center_l.addWidget(self.mid_panel, 4)
 
         root_layout.addWidget(center, 1)
@@ -613,6 +729,39 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # Settings UI defaults
+        try:
+            if self.settings is not None:
+                theme = str(self.settings.value("ui/theme", getattr(self.cfg, "theme", "slate")) or "slate")
+                density = str(self.settings.value("ui/density", getattr(self.cfg, "density", "normal")) or "normal")
+                self.settings_theme.setCurrentText(theme if theme in ("slate", "glass") else "slate")
+                self.settings_density.setCurrentText(density if density in ("normal", "compact") else "normal")
+                self.settings_auto_scan.setChecked(bool(int(self.settings.value("ui/auto_scan", 1) or 0)))
+                self.settings_auto_connect_single.setChecked(
+                    bool(int(self.settings.value("ui/auto_connect_single", 1) or 0))
+                )
+                try:
+                    self.settings_video_latency.setValue(int(self.settings.value("video/latency_ms", 60) or 60))
+                except Exception:
+                    self.settings_video_latency.setValue(60)
+                try:
+                    retry = str(self.settings.value("video/retry_profile", "stable") or "stable")
+                    self.settings_retry_profile.setCurrentText(retry if retry in ("stable", "aggressive") else "stable")
+                    self._video_retry_profile = self.settings_retry_profile.currentText()
+                except Exception:
+                    self.settings_retry_profile.setCurrentText("stable")
+                    self._video_retry_profile = "stable"
+                try:
+                    self.settings_log_visible.setCurrentText(str(self.settings.value("log/visible_lines", 500) or 500))
+                except Exception:
+                    self.settings_log_visible.setCurrentText("500")
+                try:
+                    self.settings_log_store.setCurrentText(str(self.settings.value("log/max_lines", 5000) or 5000))
+                except Exception:
+                    self.settings_log_store.setCurrentText("5000")
+        except Exception:
+            pass
+
         # Predictable keyboard navigation (accessibility + operator UX).
         try:
             QWidget.setTabOrder(self.search, self.list)
@@ -657,12 +806,12 @@ class MainWindow(QMainWindow):
         `start_layout` (config) overrides persisted `layout_id`.
         """
         start_layout = str(getattr(self.cfg, "start_layout", "") or "").strip()
-        if start_layout in ("A", "B", "C"):
+        if start_layout in ("A", "B", "C", "D"):
             return start_layout
         if self.settings is None:
             return "A"
         layout_id = str(self.settings.value("layout_id", self.cfg.default_layout))
-        return layout_id if layout_id in ("A", "B", "C") else "A"
+        return layout_id if layout_id in ("A", "B", "C", "D") else "A"
 
     def _toggle_maximize_restore(self) -> None:
         if self.isMaximized():
@@ -686,6 +835,17 @@ class MainWindow(QMainWindow):
         if self._layout_transition_in_progress:
             self._layout_transition_queued = layout_id
             return
+
+        # Tests/CI: the offscreen platform has no real compositor timing and animations
+        # can make layout changes non-deterministic. Apply immediately.
+        try:
+            import os
+
+            if str(os.environ.get("QT_QPA_PLATFORM", "") or "") == "offscreen":
+                self._apply_layout_now(layout_id)
+                return
+        except Exception:
+            pass
 
         # If we're not visible yet, apply immediately (no animation).
         if not self.isVisible():
@@ -735,13 +895,16 @@ class MainWindow(QMainWindow):
         self.setUpdatesEnabled(False)
         try:
             # Normalize + persist layout id early (single source of truth).
-            layout_id = layout_id if layout_id in ("A", "B", "C") else "A"
+            layout_id = layout_id if layout_id in ("A", "B", "C", "D") else "A"
+            # Keep a runtime copy so navigation does not depend on check-state timing.
+            self._layout_id = layout_id
             self.settings.setValue("layout_id", layout_id)
             if layout_id == "B":
                 # ---------------- Drive Mode (layout B) ----------------
                 self._pre_drive_was_maximized = bool(self.isMaximized())
                 self.btn_drive.setChecked(True)
                 self.btn_debug.setChecked(False)
+                self.btn_settings.setChecked(False)
                 self._sync_header_nav_buttons(layout_id)
 
                 # Hide everything non-essential
@@ -753,6 +916,12 @@ class MainWindow(QMainWindow):
                 self.trace_dock.hide()
 
                 # Essential Drive overlays
+                # Entering Drive from Settings must deterministically restore the video surface.
+                try:
+                    self.settings_panel.setVisible(False)
+                    self.video_container.setVisible(True)
+                except Exception:
+                    pass
                 self.hud.setVisible(True)
                 # Pure focus: only 3 signals (STATE/MOZA/VIDEO)
                 self.hud_output.setVisible(False)
@@ -810,7 +979,7 @@ class MainWindow(QMainWindow):
                 self._show_banner("muted", UI.drive_mode_hint, auto_hide_ms=0)
                 self._update_bottom_hint()
             else:
-                # ---------------- Panel/Debug (layouts A/C) ----------------
+                # ---------------- Dashboard/Monitor/Settings (layouts A/C/D) ----------------
                 # Exit Drive Mode: restore the operator's prior window state.
                 if not self._is_wayland():
                     if self._pre_drive_was_maximized:
@@ -842,16 +1011,68 @@ class MainWindow(QMainWindow):
                 # Show normal chrome
                 self.header_widget.show()
                 self.banner.setVisible(bool(self.banner_text.text().strip()))
-                self.left_panel.show()
+                # Panels (C): monitor view, no sidebar duplication.
+                if layout_id == "C":
+                    self.left_panel.hide()
+                else:
+                    self.left_panel.show()
                 self.bottom.show()
                 if layout_id == "C":
                     self.telemetry_dock.show()
                     self.trace_dock.show()
                     self.btn_debug.setChecked(True)
-                else:
+                    self.btn_settings.setChecked(False)
+                    # Hide embedded log panel in monitor mode (no duplication).
+                    try:
+                        self.log_dock.hide()
+                    except Exception:
+                        pass
+                    # Monitor mode should focus on video + telemetry.
+                    try:
+                        self.settings_panel.setVisible(False)
+                        self.video_container.setVisible(True)
+                        # Hide dashboard telemetry summary; docks are the monitor surface.
+                        self.telemetry_caption.setVisible(False)
+                        self.telemetry_label.setVisible(False)
+                        self.live_video_label.setVisible(True)
+                    except Exception:
+                        pass
+                elif layout_id == "D":
+                    # Settings: no docks, no sidebar, show settings panel.
                     self.btn_debug.setChecked(False)
+                    self.btn_settings.setChecked(True)
                     self.telemetry_dock.hide()
                     self.trace_dock.hide()
+                    try:
+                        self.log_dock.hide()
+                    except Exception:
+                        pass
+                    self.left_panel.hide()
+                    try:
+                        self.settings_panel.setVisible(True)
+                        self.video_container.setVisible(False)
+                        self.telemetry_caption.setVisible(False)
+                        self.telemetry_label.setVisible(False)
+                        self.live_video_label.setVisible(False)
+                    except Exception:
+                        pass
+                else:
+                    self.btn_debug.setChecked(False)
+                    self.btn_settings.setChecked(False)
+                    self.telemetry_dock.hide()
+                    self.trace_dock.hide()
+                    try:
+                        self.log_dock.show()
+                    except Exception:
+                        pass
+                    try:
+                        self.settings_panel.setVisible(False)
+                        self.video_container.setVisible(True)
+                        self.live_video_label.setVisible(True)
+                        self.telemetry_caption.setVisible(True)
+                        self.telemetry_label.setVisible(True)
+                    except Exception:
+                        pass
                 self._sync_header_nav_buttons(layout_id)
                 self._update_bottom_hint()
         finally:
@@ -862,6 +1083,7 @@ class MainWindow(QMainWindow):
         Senior UX: header button text shows the destination (what happens on click).
         - In Drive (B): Drive button shows "Dashboard"
         - In Panels (C): Panels button shows "Dashboard"
+        - In Settings (D): Settings button shows "Dashboard"
         - In Dashboard (A): show "Drive" and "Panels"
         """
         if layout_id == "B":
@@ -869,29 +1091,41 @@ class MainWindow(QMainWindow):
             self.btn_drive.setToolTip(UI.dashboard_tooltip)
             self.btn_debug.setText(UI.panels_button)
             self.btn_debug.setToolTip(UI.panels_tooltip)
+            self.btn_settings.setText(UI.settings_button)
+            self.btn_settings.setToolTip(UI.settings_tooltip)
             return
         if layout_id == "C":
             self.btn_drive.setText(UI.drive_button)
             self.btn_drive.setToolTip(UI.drive_tooltip)
             self.btn_debug.setText(UI.dashboard_button)
             self.btn_debug.setToolTip(UI.dashboard_tooltip)
+            self.btn_settings.setText(UI.settings_button)
+            self.btn_settings.setToolTip(UI.settings_tooltip)
+            return
+        if layout_id == "D":
+            self.btn_drive.setText(UI.drive_button)
+            self.btn_drive.setToolTip(UI.drive_tooltip)
+            self.btn_debug.setText(UI.panels_button)
+            self.btn_debug.setToolTip(UI.panels_tooltip)
+            self.btn_settings.setText(UI.dashboard_button)
+            self.btn_settings.setToolTip(UI.dashboard_tooltip)
             return
         # A (Dashboard)
         self.btn_drive.setText(UI.drive_button)
         self.btn_drive.setToolTip(UI.drive_tooltip)
         self.btn_debug.setText(UI.panels_button)
         self.btn_debug.setToolTip(UI.panels_tooltip)
+        self.btn_settings.setText(UI.settings_button)
+        self.btn_settings.setToolTip(UI.settings_tooltip)
 
     def _set_fade_overlay_alpha(self, a: float) -> None:
         a = 0.0 if a < 0.0 else (1.0 if a > 1.0 else a)
         # Single source of truth for the current overlay alpha.
         self._fade_overlay_alpha = float(a)
         # Obsidian fade. Keep it subtle (not pure black).
-        alpha = int(a * 255)
-        self._fade_overlay.setStyleSheet(f"background: rgba(15, 23, 42, {alpha}); border: none;")
-        if alpha <= 0:
-            self._fade_overlay.hide()
-        else:
+        # Use windowOpacity to avoid setStyleSheet() per frame (repolish/repaint heavy).
+        alpha = float(a)
+        if alpha > 0:
             # Ensure geometry is valid before showing; otherwise some platforms
             # can end up with a full-window opaque overlay until the first resizeEvent.
             try:
@@ -900,6 +1134,9 @@ class MainWindow(QMainWindow):
                 pass
             self._fade_overlay.show()
             self._fade_overlay.raise_()
+        self._fade_overlay.setWindowOpacity(alpha)
+        if alpha <= 0:
+            self._fade_overlay.hide()
 
     def _fade_overlay_to(self, end: float, *, ms: int = 200, on_done=None) -> None:
         if self._fade_overlay is None:
@@ -948,10 +1185,94 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, lambda: self._fade_overlay_to(0.0, ms=int(ms)))
 
     def toggle_drive_mode(self) -> None:
-        self.apply_layout("B" if self.btn_drive.isChecked() else "A")
+        # Decide destination by current layout (not by check-state timing).
+        current = str(getattr(self, "_layout_id", "A") or "A")
+        self.apply_layout("A" if current == "B" else "B")
 
     def toggle_debug_mode(self) -> None:
-        self.apply_layout("C" if self.btn_debug.isChecked() else "A")
+        current = str(getattr(self, "_layout_id", "A") or "A")
+        self.apply_layout("A" if current == "C" else "C")
+
+    def toggle_settings_mode(self) -> None:
+        current = str(getattr(self, "_layout_id", "A") or "A")
+        self.apply_layout("A" if current == "D" else "D")
+
+    def _apply_settings_from_ui(self) -> None:
+        if self.settings is None:
+            return
+        theme = str(self.settings_theme.currentText() or "slate")
+        density = str(self.settings_density.currentText() or "normal")
+        auto_scan = bool(self.settings_auto_scan.isChecked())
+        auto_connect_single = bool(self.settings_auto_connect_single.isChecked())
+        video_latency = int(self.settings_video_latency.value())
+        retry_profile = str(self.settings_retry_profile.currentText() or "stable")
+        log_visible = int(self.settings_log_visible.currentText() or "500")
+        log_store = int(self.settings_log_store.currentText() or "5000")
+
+        self.settings.setValue("ui/theme", theme)
+        self.settings.setValue("ui/density", density)
+        self.settings.setValue("ui/auto_scan", 1 if auto_scan else 0)
+        self.settings.setValue("ui/auto_connect_single", 1 if auto_connect_single else 0)
+        self.settings.setValue("video/latency_ms", video_latency)
+        self.settings.setValue("video/retry_profile", retry_profile)
+        self.settings.setValue("log/visible_lines", log_visible)
+        self.settings.setValue("log/max_lines", log_store)
+
+        # Apply runtime knobs immediately.
+        self._video_retry_profile = retry_profile
+        try:
+            self.cfg.log_max_lines = int(log_store)
+        except Exception:
+            pass
+        try:
+            self.log_view.setMaximumBlockCount(int(log_visible))
+        except Exception:
+            pass
+
+        # Apply QSS immediately (premium UX). Density spacing changes may still require restart
+        # for perfect geometry, but QSS + typography update instantly.
+        try:
+            app = QApplication.instance()
+            if app is not None:
+                app.setStyleSheet(build_qss(theme=theme, density=density))
+        except Exception:
+            pass
+        try:
+            self._show_banner("ok", UI.settings_banner_applied, auto_hide_ms=2000)
+        except Exception:
+            pass
+
+    def _copy_diagnostics(self) -> None:
+        parts: list[str] = []
+        try:
+            parts.append(f"app=rc-simulator {metadata.version('rc-simulator')}")
+        except Exception:
+            parts.append("app=rc-simulator (version unknown)")
+        try:
+            parts.append(f"qt_platform={QGuiApplication.platformName()}")
+        except Exception:
+            pass
+        try:
+            import os
+
+            parts.append(f"QT_QPA_PLATFORM={os.environ.get('QT_QPA_PLATFORM', '')}")
+        except Exception:
+            pass
+        try:
+            parts.append(f"theme={self.settings_theme.currentText()}")
+            parts.append(f"density={self.settings_density.currentText()}")
+            parts.append(f"layout={self.settings.value('layout_id', 'A') if self.settings is not None else 'A'}")
+            parts.append(f"retry_profile={self._video_retry_profile}")
+            parts.append(f"log_visible={self.settings_log_visible.currentText()}")
+            parts.append(f"log_store={self.settings_log_store.currentText()}")
+        except Exception:
+            pass
+        text = "\n".join(parts).strip() + "\n"
+        try:
+            cb = QApplication.clipboard()
+            cb.setText(text)
+        except Exception:
+            pass
 
     # ---------------- Core actions ----------------
     def start_scan(self) -> None:
@@ -1034,6 +1355,7 @@ class MainWindow(QMainWindow):
         self._refresh_pulse_state()
 
     def disconnect_session(self) -> None:
+        self._video_retry_seq += 1
         drive_alive = self.controller.drive_thread is not None and self.controller.drive_thread.is_alive()
         scan_alive = self.controller.scan_thread is not None and self.controller.scan_thread.is_alive()
         if not drive_alive and not scan_alive:
@@ -1138,12 +1460,28 @@ class MainWindow(QMainWindow):
             selected_index=self.selected_index,
         )
         # Reduce duplicated status: header badges are primary.
-        # Keep detailed status only while scanning/connecting/connected.
-        show_status = bool(self.is_scanning or self.is_connecting or self.is_connected)
+        # Keep detailed status only while scanning/connecting (connected UI should be clean).
+        show_status = bool(self.is_scanning or self.is_connecting)
         if self.session_label.isVisible() != show_status:
             self.session_label.setVisible(show_status)
         if self.detail_label.isVisible() != show_status:
             self.detail_label.setVisible(show_status)
+
+        # Telemetry summary is the persistent dashboard readout.
+        # Only overwrite when we don't have a live telemetry payload to show.
+        try:
+            cur = str(self.telemetry_label.text() or "").strip()
+            if self.is_scanning:
+                if not cur or cur == UI.session_inactive:
+                    self.telemetry_label.setText("Scanning…")
+            elif self.is_connecting:
+                if not cur or cur == UI.session_inactive:
+                    self.telemetry_label.setText("Connecting…")
+            elif not self.is_connected:
+                if cur != UI.session_inactive:
+                    self.telemetry_label.setText(UI.session_inactive)
+        except Exception:
+            pass
         self._refresh_mid_state()
         self._update_left_hint()
 
@@ -1466,11 +1804,21 @@ class MainWindow(QMainWindow):
             # Called from GI thread context -> marshal to Qt thread.
             def _apply() -> None:
                 img = QImage(frame.rgb_bytes, frame.width, frame.height, QImage.Format_BGRA8888)
-                pix = QPixmap.fromImage(img)
-                if self.video_view.width() > 10 and self.video_view.height() > 10:
-                    pix = pix.scaled(self.video_view.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
-                self._last_video_pixmap = pix
-                self.video_view.setPixmap(pix)
+                base = QPixmap.fromImage(img)
+                self._last_video_pixmap = base
+
+                # Cache scaled pixmap; recompute only when target size changes.
+                target = self.video_view.size()
+                if target.width() > 10 and target.height() > 10:
+                    if (
+                        getattr(self, "_last_video_scaled_size", None) != target
+                        or getattr(self, "_last_video_scaled_pixmap", None) is None
+                    ):
+                        self._last_video_scaled_pixmap = base.scaled(target, Qt.KeepAspectRatio, Qt.FastTransformation)
+                        self._last_video_scaled_size = target
+                    self.video_view.setPixmap(self._last_video_scaled_pixmap)
+                else:
+                    self.video_view.setPixmap(base)
                 self.video_view.setScaledContents(False)
                 self.btn_video_help.setVisible(False)
                 self.video_overlay.setVisible(False)
@@ -1521,6 +1869,7 @@ class MainWindow(QMainWindow):
             on_error(UI.video_backend_not_available)
 
     def _stop_video(self) -> None:
+        self._video_retry_seq += 1
         if self._video_receiver is not None:
             try:
                 self._video_receiver.stop()
@@ -1533,6 +1882,8 @@ class MainWindow(QMainWindow):
         self.video_view.setText(UI.video_not_available)
         self.video_view.setPixmap(QPixmap())
         self._last_video_pixmap = None
+        self._last_video_scaled_pixmap = None
+        self._last_video_scaled_size = None
         self.btn_video_help.setVisible(False)
         self._refresh_video_overlay()
         self._set_badge_kind(self.badge_video, "muted")
@@ -1544,10 +1895,16 @@ class MainWindow(QMainWindow):
         # Keep aspect ratio on window/fullscreen resize even if frames pause.
         if self._last_video_pixmap is None or self._last_video_pixmap.isNull():
             return
-        pix = self._last_video_pixmap
-        if self.video_view.width() > 10 and self.video_view.height() > 10:
-            pix = pix.scaled(self.video_view.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
-        self.video_view.setPixmap(pix)
+        base = self._last_video_pixmap
+        target = self.video_view.size()
+        if target.width() > 10 and target.height() > 10:
+            self._last_video_scaled_pixmap = base.scaled(target, Qt.KeepAspectRatio, Qt.FastTransformation)
+            self._last_video_scaled_size = target
+            self.video_view.setPixmap(self._last_video_scaled_pixmap)
+            return
+        self._last_video_scaled_pixmap = None
+        self._last_video_scaled_size = None
+        self.video_view.setPixmap(base)
 
     def _schedule_video_retry(self, video_port: int) -> None:
         if not self.is_connected:
@@ -1555,10 +1912,14 @@ class MainWindow(QMainWindow):
         if not self._video_retry_enabled:
             return
         delay = self._video_retry_ms
-        self._video_retry_ms = min(self._video_retry_ms * 2, 5000)
+        max_ms = 5000 if str(self._video_retry_profile) == "stable" else 3000
+        self._video_retry_ms = min(self._video_retry_ms * 2, int(max_ms))
+        seq = int(self._video_retry_seq)
 
         def _retry() -> None:
             if not self.is_connected:
+                return
+            if seq != self._video_retry_seq:
                 return
             # best-effort retry: just re-create receiver
             self._start_video_for_car({"video_port": video_port})

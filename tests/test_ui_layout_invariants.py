@@ -47,7 +47,7 @@ def _ensure_qt_app():
     return app
 
 
-@pytest.mark.parametrize("layout_id", ["A", "B", "C"])
+@pytest.mark.parametrize("layout_id", ["A", "B", "C", "D"])
 def test_layout_invariants(layout_id: str, monkeypatch) -> None:
     # Keep tests deterministic and avoid background threads / network.
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
@@ -77,12 +77,21 @@ def test_layout_invariants(layout_id: str, monkeypatch) -> None:
         assert w.hud.isVisible()
     elif layout_id == "C":
         assert w.header_widget.isVisible()
-        assert w.left_panel.isVisible()
+        assert not w.left_panel.isVisible()
         assert w.bottom.isVisible()
-        assert w.log_dock.isVisible()
+        assert not w.log_dock.isVisible()
         assert w.telemetry_dock.isVisible()
         assert w.trace_dock.isVisible()
         assert not w.hud.isVisible()
+    elif layout_id == "D":
+        assert w.header_widget.isVisible()
+        assert not w.left_panel.isVisible()
+        assert w.bottom.isVisible()
+        assert not w.log_dock.isVisible()
+        assert not w.telemetry_dock.isVisible()
+        assert not w.trace_dock.isVisible()
+        assert not w.hud.isVisible()
+        assert w.settings_panel.isVisible()
     else:
         assert w.header_widget.isVisible()
         assert w.left_panel.isVisible()

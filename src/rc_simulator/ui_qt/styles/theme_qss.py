@@ -135,6 +135,7 @@ def build_qss(*, theme: str = "slate", density: str = "normal") -> str:
         font_title = "19px"
         font_label = "12px"
         font_mono = "11px"
+        font_h2 = font_title
         radius_md = "10px"
         radius_lg = "12px"
         pad_sm = "6px 8px"
@@ -150,6 +151,7 @@ def build_qss(*, theme: str = "slate", density: str = "normal") -> str:
         font_title = "20px"
         font_label = "13px"
         font_mono = "12px"
+        font_h2 = font_title
         radius_md = "12px"
         radius_lg = "14px"
         pad_sm = "6px 10px"
@@ -270,6 +272,33 @@ QPlainTextEdit:focus {
 QPlainTextEdit#logView {
   font-family: "Cascadia Mono", "Consolas";
   font-size: @FONT_MONO@;
+}
+
+/* ---------- Settings (Layout D) ---------- */
+QWidget#settingsPanel {
+  background: transparent;
+}
+QScrollArea {
+  background: transparent;
+  border: none;
+}
+QScrollArea > QWidget > QWidget {
+  background: transparent;
+}
+QGroupBox {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: @RADIUS_LG@;
+  margin-top: 10px;
+  padding: 12px;
+  font-weight: 800;
+}
+QGroupBox::title {
+  subcontrol-origin: margin;
+  subcontrol-position: top left;
+  padding: 0 8px;
+  left: 12px;
+  color: @TEXT_STRONG@;
 }
 
 /* ---------- Buttons (High-tech) ---------- */
@@ -524,7 +553,7 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QListWidget:focus {
   border: 1px solid @ACCENT_65@;
 }
 QPushButton:focus {
-  border: 1px solid @ACCENT_22@;
+  border: 1px solid @ACCENT_65@;
 }
 
 /* ---------- Compact helpers ---------- */
@@ -576,6 +605,12 @@ QWidget#videoOverlay {
   border: 1px solid @BORDER_SOFT@;
   border-radius: @RADIUS_LG@;
 }
+
+/* ---------- Fade overlay (layout transitions) ---------- */
+QWidget#fadeOverlay {
+  background: rgba(15, 23, 42, 255);
+  border: none;
+}
 QLabel#videoOverlayTitle {
   font-size: @FONT_LABEL@;
   font-weight: 800;
@@ -598,7 +633,7 @@ QLabel#driveGuardTitle {
 QProgressBar {
   background: rgba(2, 6, 23, 0.28);
   border: 1px solid @BORDER_SOFT@;
-  border-radius: 5px;
+  border-radius: @RADIUS_MD@;
   height: 10px;
 }
 QProgressBar::chunk {
@@ -606,7 +641,7 @@ QProgressBar::chunk {
     stop:0 rgba(147, 197, 253, 0.85),
     stop:1 @ACCENT_70@
   );
-  border-radius: 4px;
+  border-radius: @RADIUS_MD@;
 }
 
 /* ---------- Splash ---------- */
@@ -621,11 +656,11 @@ QLabel#splashTitle {
 QProgressBar#splashProgress {
   background: @BORDER_SOFT@;
   border: 1px solid @BORDER@;
-  border-radius: 5px;
+  border-radius: @RADIUS_MD@;
 }
 QProgressBar#splashProgress::chunk {
   background: @ACCENT_85@;
-  border-radius: 5px;
+  border-radius: @RADIUS_MD@;
 }
 QProgressBar[barKind="gas"]::chunk {
   background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -656,7 +691,7 @@ QScrollBar:vertical {
 }
 QScrollBar::handle:vertical {
   background: @SCROLLBAR_HANDLE@;
-  border-radius: 5px;
+  border-radius: @RADIUS_MD@;
   min-height: 20px;
 }
 QScrollBar::handle:vertical:hover {
@@ -761,6 +796,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
         .replace("@FONT_TITLE@", font_title)
         .replace("@FONT_LABEL@", font_label)
         .replace("@FONT_MONO@", font_mono)
+        .replace("@FONT_H2@", font_h2)
         .replace("@OK_FILL@", ok_fill)
         .replace("@WARN_FILL@", warn_fill)
         .replace("@DANGER_FILL@", danger_fill)

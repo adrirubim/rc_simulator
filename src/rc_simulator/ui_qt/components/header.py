@@ -20,6 +20,7 @@ class Header:
     badge_output: QLabel
     btn_drive: QPushButton
     btn_debug: QPushButton
+    btn_settings: QPushButton
     btn_min: QPushButton
     btn_max: QPushButton
     btn_close: QPushButton
@@ -30,6 +31,7 @@ def build_header(
     parent: QWidget,
     on_toggle_drive_mode: Callable[[], None],
     on_toggle_debug_mode: Callable[[], None],
+    on_toggle_settings_mode: Callable[[], None],
     on_minimize: Callable[[], None],
     on_maximize_restore: Callable[[], None],
     on_close: Callable[[], None],
@@ -83,13 +85,25 @@ def build_header(
     btn_drive.setCheckable(True)
     btn_drive.clicked.connect(on_toggle_drive_mode)
     btn_drive.setToolTip(UI.drive_tooltip)
+    btn_drive.setAccessibleName("Drive mode")
+    btn_drive.setAccessibleDescription("Toggle Drive mode layout")
     header_l.addWidget(btn_drive)
 
     btn_debug = QPushButton(UI.panels_button, header_widget)
     btn_debug.setCheckable(True)
     btn_debug.clicked.connect(on_toggle_debug_mode)
     btn_debug.setToolTip(UI.panels_tooltip)
+    btn_debug.setAccessibleName("Panels")
+    btn_debug.setAccessibleDescription("Toggle Panels layout")
     header_l.addWidget(btn_debug)
+
+    btn_settings = QPushButton(UI.settings_button, header_widget)
+    btn_settings.setCheckable(True)
+    btn_settings.clicked.connect(on_toggle_settings_mode)
+    btn_settings.setToolTip(UI.settings_tooltip)
+    btn_settings.setAccessibleName("Settings")
+    btn_settings.setAccessibleDescription("Toggle Settings layout")
+    header_l.addWidget(btn_settings)
 
     btn_min = QPushButton("–", header_widget)
     btn_min.setObjectName("windowMin")
@@ -122,6 +136,7 @@ def build_header(
         badge_output=badge_output,
         btn_drive=btn_drive,
         btn_debug=btn_debug,
+        btn_settings=btn_settings,
         btn_min=btn_min,
         btn_max=btn_max,
         btn_close=btn_close,

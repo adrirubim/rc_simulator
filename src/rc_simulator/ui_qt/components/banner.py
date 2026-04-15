@@ -30,6 +30,8 @@ def build_banner(*, parent: QWidget, on_close: Callable[[], None]) -> Banner:
     close = QPushButton("✕", banner)
     close.setObjectName("bannerClose")
     close.clicked.connect(on_close)
+    close.setAccessibleName("Dismiss banner")
+    close.setAccessibleDescription("Close and hide this notification banner")
     layout.addWidget(close, 0, alignment=Qt.AlignTop)
 
     banner.setVisible(False)

@@ -127,18 +127,14 @@ class SessionPanel:
         # Only show a mid-state card for transient busy states (scan/connect),
         # not for empty/idle selection guidance (which lives in the left panel).
         if is_scanning:
-            self.mid_state_title.setText("Scanning…")
-            self.mid_state_body.setText(
-                "Searching for cars on the local network. Results will appear in the list on the left."
-            )
+            self.mid_state_title.setText(UI.mid_state_scanning_title)
+            self.mid_state_body.setText(UI.mid_state_scanning_body)
             self.mid_state.setVisible(True)
             return
 
         if is_connecting:
-            self.mid_state_title.setText("Connecting…")
-            self.mid_state_body.setText(
-                "Starting a session with the selected car. If video doesn't start, use “Video requirements”."
-            )
+            self.mid_state_title.setText(UI.mid_state_connecting_title)
+            self.mid_state_body.setText(UI.mid_state_connecting_body)
             self.mid_state.setVisible(True)
             return
 

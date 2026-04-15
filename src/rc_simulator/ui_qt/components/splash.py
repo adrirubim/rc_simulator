@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCursor, QFont, QGuiApplication
 from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QVBoxLayout, QWidget
 
+from ..strings import UI
+
 
 class SplashScreen(QWidget):
     def __init__(self) -> None:
@@ -24,7 +26,7 @@ class SplashScreen(QWidget):
         layout.setContentsMargins(28, 28, 28, 28)
         layout.setSpacing(18)
 
-        title = QLabel("RC Simulator", root)
+        title = QLabel(UI.app_title, root)
         title.setObjectName("splashTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         f = QFont("Segoe UI", 36)

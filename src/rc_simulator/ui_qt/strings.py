@@ -22,10 +22,56 @@ class UiStrings:
     badge_moza_no: str = "MOZA: NO"
     dashboard_button: str = "Dashboard"
     drive_button: str = "Drive"
-    drive_tooltip: str = "Enter Drive Mode (layout B)."
+    drive_tooltip: str = "Go to Drive."
     panels_button: str = "Panels"
-    panels_tooltip: str = "Open dockable telemetry/trace panels (layout C)."
-    dashboard_tooltip: str = "Back to Dashboard (layout A)."
+    panels_tooltip: str = "Go to Panels."
+    settings_button: str = "Settings"
+    settings_tooltip: str = "Go to Settings."
+    dashboard_tooltip: str = "Go to Dashboard."
+
+    # Settings (Layout D)
+    settings_title: str = "Settings"
+    settings_section_display: str = "Display"
+    settings_section_behavior: str = "Behavior"
+    settings_section_video: str = "Video"
+    settings_section_logs: str = "Logs"
+    settings_theme_label: str = "Theme"
+    settings_density_label: str = "Density"
+    settings_receiver_latency_label: str = "Receiver latency"
+    settings_retry_profile_label: str = "Retry profile"
+    settings_visible_lines_label: str = "Visible lines"
+    settings_stored_lines_label: str = "Stored lines"
+    settings_auto_scan: str = "Auto-scan on launch"
+    settings_auto_connect_single: str = "Auto-connect when exactly 1 car is found"
+    settings_copy_diagnostics: str = "Copy diagnostics"
+    settings_apply: str = "Apply"
+    settings_tooltip_theme: str = "UI theme."
+    settings_tooltip_density: str = "UI spacing density."
+    settings_tooltip_auto_scan: str = "Scan on startup."
+    settings_tooltip_auto_connect_single: str = "Auto-connect if exactly one car."
+    settings_tooltip_receiver_latency: str = "Video buffer latency."
+    settings_tooltip_retry_profile: str = "Video retry behavior."
+    settings_tooltip_visible_lines: str = "UI log lines limit."
+    settings_tooltip_stored_lines: str = "Stored log lines limit."
+    settings_banner_applied: str = "Settings applied."
+
+    # Session mid-state card
+    mid_state_scanning_title: str = "Scanning…"
+    mid_state_scanning_body: str = (
+        "Searching for cars on the local network. Results will appear in the list on the left."
+    )
+    mid_state_connecting_title: str = "Connecting…"
+    mid_state_connecting_body: str = (
+        "Starting a session with the selected car. If video doesn't start, use “Video requirements”."
+    )
+
+    # Debug docks
+    debug_telemetry_dock_title: str = "Telemetry"
+    debug_trace_dock_title: str = "Trace"
+    debug_output_label: str = "Output: {value}"
+    debug_steering_label: str = "Steering (abs)"
+    debug_throttle_label: str = "Throttle"
+    debug_brake_label: str = "Brake"
 
     # Left panel
     search_placeholder: str = "Search cars…"
@@ -35,12 +81,12 @@ class UiStrings:
     scan_button: str = "Scan"
     scan_button_scanning: str = "Scanning…"
     scan_button_cancel: str = "Cancel"
-    scan_tooltip: str = "Scan the network to find cars."
+    scan_tooltip: str = "Scan for cars."
     connect_button: str = "Connect"
     connect_button_connecting: str = "Connecting…"
-    connect_tooltip: str = "Connect to the selected car (Ctrl+Enter)."
+    connect_tooltip: str = "Connect (Ctrl+Enter)."
     disconnect_button: str = "Disconnect"
-    disconnect_tooltip: str = "Disconnect the session (Esc)."
+    disconnect_tooltip: str = "Disconnect (Esc)."
 
     # Mid panel
     mid_ready: str = "Ready"
@@ -87,9 +133,9 @@ class UiStrings:
     video_not_available: str = "Video: not available"
     video_connecting: str = "Video: connecting…"
     video_requirements_button: str = "Video requirements"
-    video_requirements_tooltip: str = "Show what to install for embedded video."
+    video_requirements_tooltip: str = "Show video requirements."
     overlay_disconnect_button: str = "DISCONNECT"
-    overlay_disconnect_tooltip: str = "Disconnect now (Esc)."
+    overlay_disconnect_tooltip: str = "Disconnect now."
     overlay_title_video: str = "Video"
     overlay_connecting: str = "Connecting…"
     overlay_waiting_connection: str = "Waiting for connection…"
@@ -109,9 +155,9 @@ class UiStrings:
     log_filter_placeholder: str = "Filter logs…"
     log_pause: str = "Pause"
     log_resume: str = "Resume"
-    log_pause_tooltip: str = "Pause log auto-scroll (also auto-enables when you scroll up)."
+    log_pause_tooltip: str = "Pause auto-scroll."
     log_clear: str = "Clear"
-    log_clear_tooltip: str = "Clear the log view."
+    log_clear_tooltip: str = "Clear logs."
 
     # Exit / shutdown
     exit_confirm_title: str = "Exit RC Simulator?"

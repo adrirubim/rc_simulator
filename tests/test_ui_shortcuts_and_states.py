@@ -107,14 +107,17 @@ def test_enter_triggers_connect_when_not_typing(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize(
-    ("layout_id", "drive_text", "panels_text"),
+    ("layout_id", "drive_text", "panels_text", "settings_text"),
     [
-        ("A", "Drive", "Panels"),
-        ("C", "Drive", "Dashboard"),
-        ("B", "Dashboard", "Panels"),
+        ("A", "Drive", "Panels", "Settings"),
+        ("C", "Drive", "Dashboard", "Settings"),
+        ("B", "Dashboard", "Panels", "Settings"),
+        ("D", "Drive", "Panels", "Dashboard"),
     ],
 )
-def test_header_nav_buttons_show_destination(layout_id: str, drive_text: str, panels_text: str, monkeypatch) -> None:
+def test_header_nav_buttons_show_destination(
+    layout_id: str, drive_text: str, panels_text: str, settings_text: str, monkeypatch
+) -> None:
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     monkeypatch.setenv("RC_UI_AUTO_SCAN", "0")
     monkeypatch.setenv("RC_UI_DEFAULT_LAYOUT", "A")
@@ -133,6 +136,7 @@ def test_header_nav_buttons_show_destination(layout_id: str, drive_text: str, pa
 
     assert w.btn_drive.text() == drive_text
     assert w.btn_debug.text() == panels_text
+    assert w.btn_settings.text() == settings_text
 
 
 def test_drive_guard_overlay_visible_when_not_connected(monkeypatch) -> None:
@@ -154,3 +158,61 @@ def test_drive_guard_overlay_visible_when_not_connected(monkeypatch) -> None:
     app.processEvents()
 
     assert w.drive_guard_overlay.isVisible()
+    # Drive guard must suppress any underlying "video not available" overlay/text.
+    assert not w.video_view.isVisible()
+    assert not w.video_overlay.isVisible()
+
+
+def test_drive_guard_overlay_hidden_when_connected(monkeypatch) -> None:
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    monkeypatch.setenv("RC_UI_AUTO_SCAN", "0")
+    monkeypatch.setenv("RC_UI_DEFAULT_LAYOUT", "A")
+    monkeypatch.setenv("RC_UI_START_LAYOUT", "A")
+
+    app = _ensure_qt_app()
+
+    from rc_simulator.ui_qt.views.main_window import MainWindow
+
+    w = MainWindow(settings=_MemSettings(), controller=_StubController())
+    w.show()
+    app.processEvents()
+
+    w.is_connected = True
+    w._apply_layout_now("B")  # type: ignore[attr-defined]
+    app.processEvents()
+
+    assert not w.drive_guard_overlay.isVisible()
+    # In Drive Mode while connected but before frames arrive, the app may show the video overlay
+    # (connecting/no-frames) and keep the video view hidden. We only require that the guard is
+    # gone and some video surface is visible.
+    assert w.video_view.isVisible() or w.video_overlay.isVisible()
+
+
+def test_click_drive_from_settings_enters_drive_layout(monkeypatch) -> None:
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    monkeypatch.setenv("RC_UI_AUTO_SCAN", "0")
+    monkeypatch.setenv("RC_UI_DEFAULT_LAYOUT", "A")
+    monkeypatch.setenv("RC_UI_START_LAYOUT", "A")
+
+    app = _ensure_qt_app()
+
+    from rc_simulator.ui_qt.views.main_window import MainWindow
+
+    w = MainWindow(settings=_MemSettings(), controller=_StubController())
+    w.show()
+    app.processEvents()
+
+    # Enter Settings (D) first.
+    w._apply_layout_now("D")  # type: ignore[attr-defined]
+    app.processEvents()
+    assert w.settings_panel.isVisible()
+    assert w.header_widget.isVisible()
+
+    # Simulate user clicking the Drive button.
+    w.toggle_drive_mode()  # type: ignore[attr-defined]
+    app.processEvents()
+
+    # In Drive (B) we must hide settings and chrome.
+    assert not w.settings_panel.isVisible()
+    assert w.video_container.isVisible()
+    assert not w.header_widget.isVisible()
