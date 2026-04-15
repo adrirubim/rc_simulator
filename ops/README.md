@@ -2,15 +2,22 @@
 
 Scripts and assets for deployment / OS integration.
 
+### Release / support checklist (Linux-first)
+
+- Run CI parity gate: `./scripts/dev-verify.sh`
+- Capture support bundle:
+  - In-app: Settings -> "Copy diagnostics"
+  - Attach `pip-audit.json` and `sbom.cdx.json` from CI artifacts when available
+
 ### One-command install
 
 - Linux/WSL: `ops/install.sh --all` (installs launcher; installs systemd service if systemd is running)
 - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File ops/install.ps1`
 
-### “Double click” install
+### "Double click" install
 
 - Windows: double-click `ops/install.cmd`
-- Linux: make it executable once (`chmod +x ops/install.sh`), then double-click `ops/install.sh` and choose “Run”
+- Linux: make it executable once (`chmod +x ops/install.sh`), then double-click `ops/install.sh` and choose "Run"
 - Note (Windows Explorer): if file extensions are hidden, you may see multiple files named `install`. Use `install.cmd` (not `install.ps1` or `install.sh`).
 
 ### `ops/linux/`

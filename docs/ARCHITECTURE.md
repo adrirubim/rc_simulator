@@ -2,7 +2,7 @@
 
 ### Entrypoint
 
-- `python -m rc_simulator` → `src/rc_simulator/__main__.py`
+- `python -m rc_simulator` -> `src/rc_simulator/__main__.py`
 
 ### Main packages
 
@@ -19,10 +19,10 @@
 
 ### Typical flow
 
-1. Startup → bootstrap/config
+1. Startup -> bootstrap/config
 2. Qt UI initializes
-3. “Car” discovery (UDP / network)
-4. Control session (MOZA/evdev → UDP to the car)
+3. "Car" discovery (UDP / network)
+4. Control session (MOZA/evdev -> UDP to the car)
 5. Optional video (GStreamer), depending on environment
 
 ### Ops (OS integration)

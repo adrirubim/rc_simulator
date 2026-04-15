@@ -20,7 +20,7 @@ Open an issue using the **Bug report** template. Include:
 
 Open an issue using the **Feature request** template. Include:
 
-- The problem you’re trying to solve (why)
+- The problem you're trying to solve (why)
 - Proposed solution (what)
 - Alternatives considered
 - Impact / scope (breaking or non-breaking)

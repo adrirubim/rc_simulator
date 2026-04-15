@@ -40,6 +40,13 @@ sudo apt update
 sudo apt install -y python3-gi gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
 
+### Security artifacts (pip-audit / SBOM)
+
+GitHub Actions generates dependency security artifacts on each run of the Security workflow:
+
+- `pip-audit.json`: Python dependency vulnerability report
+- `sbom.cdx.json`: CycloneDX SBOM for the installed environment
+
 Test the script:
 
 ```bash
@@ -49,5 +56,5 @@ ops/linux/camera_receive.sh 5600 0
 ### File explorer shows `*.Zone.Identifier`
 
 On Windows, when browsing `\\wsl.localhost\...`, the explorer may show **Alternate Data Streams (ADS)** like `:Zone.Identifier`.
-They are not “real files” on Linux and do not affect execution in WSL.
+They are not "real files" on Linux and do not affect execution in WSL.
 

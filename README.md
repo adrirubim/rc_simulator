@@ -57,8 +57,8 @@ Use these commands from the **repository root** as your main entrypoints:
 
 RC Simulator is a Qt UI that coordinates:
 
-- “Car” discovery (network/UDP)
-- Control (MOZA/evdev → UDP)
+- "Car" discovery (network/UDP)
+- Control (MOZA/evdev -> UDP)
 - Optional video (GStreamer), depending on environment
 
 ### Key Highlights
@@ -246,7 +246,7 @@ RC Simulator follows a modular architecture with a clear separation of concerns 
 **High-level flow:**
 
 ```text
-Bootstrap → Qt UI (PySide6) → Discovery | Control Session | Video (optional)
+Bootstrap -> Qt UI (PySide6) -> Discovery | Control Session | Video (optional)
                           ↓
              core/config/state/events + adapters/ports/services
 ```

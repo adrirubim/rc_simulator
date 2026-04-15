@@ -1,6 +1,6 @@
 # Technical Guide — RC Simulator
 
-Single “flat” technical guide for this repository.
+Single "flat" technical guide for this repository.
 If this guide disagrees with the code, **the code wins**.
 
 ## Table of Contents
