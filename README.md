@@ -171,6 +171,13 @@ python -m pip install -e ".[dev]"
 python -m rc_simulator
 ```
 
+Headless:
+
+```bash
+# Run in headless mode (CLI)
+python -m rc_simulator.__main_headless__ --help
+```
+
 ---
 
 <a id="security"></a>
@@ -317,6 +324,7 @@ N/A. RC Simulator does not ship with user accounts. Any authentication/authoriza
 ```bash
 ./scripts/dev-verify.sh
 python -m rc_simulator
+python -m rc_simulator.__main_headless__ --help
 python3 scripts/audit_layout.py
 ```
 
@@ -325,7 +333,7 @@ python3 scripts/audit_layout.py
 <a id="before-pushing-to-github"></a>
 ## 📤 Before Pushing to GitHub
 
-CI parity (single entrypoint):
+CI parity (single command):
 
 ```bash
 ./scripts/dev-verify.sh
