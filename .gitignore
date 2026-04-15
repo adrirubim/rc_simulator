@@ -16,6 +16,18 @@ rc_simulator_logs/
 .venv/
 venv/
 ENV/
+.env
+.env.*
+
+# Credentials / secrets (preventive)
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+.pypirc
+.npmrc
+credentials*.json
 
 # OS / editor
 .DS_Store
