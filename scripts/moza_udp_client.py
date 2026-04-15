@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
 import sys
-from pathlib import Path
 
 
 def main() -> None:
-    # Canonical entrypoint (Qt UI) that works from a git checkout too.
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-    from rc_simulator.ui_qt.app import main as run
-
-    run()
+    # Wrapper: avoid importing UI modules and avoid sys.path hacks.
+    raise SystemExit(subprocess.call([sys.executable, "-m", "rc_simulator"]))
 
 
 if __name__ == "__main__":

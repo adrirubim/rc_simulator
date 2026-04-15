@@ -18,7 +18,7 @@ rm -rf src/*.egg-info src/**/*.egg-info 2>/dev/null || true
 python3 scripts/audit_layout.py
 
 ruff format --check .
-ruff check .
+ruff check --fix .
 
 pytest -q
 
