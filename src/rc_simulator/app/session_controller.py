@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import queue
 import threading
 from dataclasses import dataclass
 
+from ..core.control_config import ControlConfig
 from ..core.events import CarsEvent, LogEvent, ScanDoneEvent, StatusEvent, UiEvent
 from ..core.models import Car
 from ..core.state import AppPhase
@@ -22,10 +24,38 @@ class SessionController:
     scan_thread: threading.Thread | None = None
     drive_thread: threading.Thread | None = None
     stop_event: threading.Event | None = None
+    control_cfg: ControlConfig = ControlConfig()
+
+    def _put_event(self, ev: UiEvent, *, allow_drop: bool) -> None:
+        """
+        Best-effort enqueue with bounded backpressure.
+
+        - If the queue is full and `allow_drop` is True, drop the event.
+        - Otherwise, drop one oldest event and retry once.
+        """
+        try:
+            self.events.put_nowait(ev)
+            return
+        except queue.Full:
+            if allow_drop:
+                return
+        try:
+            _ = self.events.get_nowait()
+        except Exception:
+            return
+        try:
+            self.events.put_nowait(ev)
+        except Exception:
+            return
 
     @classmethod
-    def create_default(cls) -> SessionController:
-        return cls(events=queue.Queue())
+    def create_default(cls, *, control_cfg: ControlConfig | None = None) -> SessionController:
+        max_events = int(os.getenv("RC_EVENT_QUEUE_MAX", "2000") or "2000")
+        max_events = max(200, min(max_events, 50_000))
+        return cls(
+            events=queue.Queue(maxsize=max_events),
+            control_cfg=control_cfg or ControlConfig.from_env(),
+        )
 
     def start_scan(self) -> bool:
         if self.drive_thread is not None and self.drive_thread.is_alive():
@@ -38,7 +68,7 @@ class SessionController:
         if self.stop_event is None or self.stop_event.is_set():
             self.stop_event = threading.Event()
 
-        self.events.put(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING))
+        self._put_event(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING), allow_drop=False)
         self.scan_thread = threading.Thread(target=self._scan_worker, args=(self.stop_event,), daemon=True)
         self.scan_thread.start()
         return True
@@ -57,32 +87,39 @@ class SessionController:
         except Exception:
             pass
         # Keep phase as SCANNING; ScanDoneEvent will follow from the worker finally block.
-        self.events.put(StatusEvent(summary="Scanning…", detail="Cancelling…", phase=AppPhase.SCANNING))
+        self._put_event(
+            StatusEvent(summary="Scanning…", detail="Cancelling…", phase=AppPhase.SCANNING),
+            allow_drop=False,
+        )
         return True
 
     def _scan_worker(self, stop_event: threading.Event) -> None:
         try:
-            self.events.put(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING))
-            self.events.put(LogEvent(level="INFO", message="Searching for RC cars on the network…"))
+            self._put_event(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING), allow_drop=False)
+            self._put_event(
+                LogEvent(level="INFO", message="Searching for RC cars on the network…"),
+                allow_drop=True,
+            )
 
             cars_dict = discover_cars(timeout_s=3.0, stop_event=stop_event)
             cars = list(cars_dict.values())
             cars.sort(key=lambda c: (c.name, c.ip))
-            self.events.put(CarsEvent(cars=cars))
+            self._put_event(CarsEvent(cars=cars), allow_drop=True)
         finally:
             # Always unblock UI state transitions even if scan is cancelled or errors.
-            self.events.put(ScanDoneEvent())
+            self._put_event(ScanDoneEvent(), allow_drop=False)
 
     def connect(self, car: Car) -> bool:
         if self.drive_thread is not None and self.drive_thread.is_alive():
             return False
 
-        self.events.put(
+        self._put_event(
             StatusEvent(
                 summary="Connecting…",
                 detail=f"{car.name} ({car.ip}:{car.control_port})",
                 phase=AppPhase.CONNECTING,
-            )
+            ),
+            allow_drop=False,
         )
         self.stop_event = threading.Event()
         self.drive_thread = threading.Thread(
@@ -98,6 +135,7 @@ class SessionController:
                 self.stop_event,
                 self.events,
             ),
+            kwargs={"control_cfg": self.control_cfg},
             daemon=True,
         )
         self.drive_thread.start()
@@ -106,7 +144,10 @@ class SessionController:
     def disconnect(self) -> None:
         if self.stop_event is None:
             return
-        self.events.put(StatusEvent(summary="Disconnecting…", detail="", phase=AppPhase.DISCONNECTING))
+        self._put_event(
+            StatusEvent(summary="Disconnecting…", detail="", phase=AppPhase.DISCONNECTING),
+            allow_drop=False,
+        )
         try:
             self.stop_event.set()
         except Exception:

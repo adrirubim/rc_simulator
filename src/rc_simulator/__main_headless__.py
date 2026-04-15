@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import queue
 import signal
 import sys
@@ -11,6 +10,7 @@ from collections.abc import Iterable
 from dataclasses import asdict
 
 from .app.session_controller import SessionController
+from .core.control_config import ControlConfig
 from .core.events import (
     CarsEvent,
     ErrorEvent,
@@ -156,12 +156,13 @@ def run_headless(argv: list[str] | None = None) -> int:
     log = logging.getLogger("rc_simulator.headless")
     log.info("Starting headless control session")
 
+    control_cfg = ControlConfig.from_env()
     if args.moza_dev_path:
-        os.environ["RC_UI_MOZA_DEV_PATH"] = str(args.moza_dev_path)
+        control_cfg = ControlConfig(**{**control_cfg.__dict__, "moza_dev_path": str(args.moza_dev_path)})
     if args.allow_no_moza:
-        os.environ["RC_UI_ALLOW_NO_MOZA"] = "1"
+        control_cfg = ControlConfig(**{**control_cfg.__dict__, "allow_no_moza": True})
 
-    controller = SessionController.create_default()
+    controller = SessionController.create_default(control_cfg=control_cfg)
 
     stop_requested = False
 

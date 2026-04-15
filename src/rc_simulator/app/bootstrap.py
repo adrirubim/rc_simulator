@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..adapters.qt_settings import make_qt_settings
 from ..adapters.video_gst import GstVideoReceiver
+from ..core.control_config import ControlConfig
 from ..core.settings import SettingsStore
 from ..ports.video import VideoReceiverFactory
 from .session_controller import SessionController
@@ -17,4 +18,4 @@ def default_settings() -> SettingsStore:
 
 
 def default_controller() -> SessionController:
-    return SessionController.create_default()
+    return SessionController.create_default(control_cfg=ControlConfig.from_env())

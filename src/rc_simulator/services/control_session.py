@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import select
 import socket
 import time
@@ -8,7 +9,7 @@ from typing import Any
 
 from evdev import InputDevice, ecodes
 
-from ..core.config import load_config
+from ..core.control_config import ControlConfig
 from ..core.events import ErrorEvent, LogEvent, MozaStateEvent, SessionStoppedEvent, StatusEvent, TelemetryEvent
 from ..core.state import AppPhase, TelemetryPayload
 from .control_math import apply_deadzone, clamp, norm_axis, norm_trigger
@@ -81,7 +82,7 @@ def open_moza_device(dev_path: str) -> tuple[InputDevice, dict[int, Any]]:
     return dev, abs_map
 
 
-def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
+def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: ControlConfig) -> None:
     """
     Drive session worker for the selected car.
     Runs in a separate thread to avoid blocking the GUI.
@@ -89,75 +90,97 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
     orange_ip = car["ip"]
     orange_port = car["control_port"]
 
-    ui_queue.put(
+    def _put(ev, *, allow_drop: bool) -> None:
+        try:
+            ui_queue.put_nowait(ev)
+            return
+        except Exception as e:
+            if isinstance(e, queue.Full):
+                if allow_drop:
+                    return
+                try:
+                    _ = ui_queue.get_nowait()
+                except Exception:
+                    return
+                try:
+                    ui_queue.put_nowait(ev)
+                except Exception:
+                    return
+            return
+
+    _put(
         StatusEvent(
             summary="Connected",
             detail=f"{car['name']} ({orange_ip}:{orange_port})",
             phase=AppPhase.CONNECTED,
-        )
+        ),
+        allow_drop=False,
     )
-    ui_queue.put(LogEvent(level="INFO", message=f"Connected to {car['name']}"))
-    ui_queue.put(LogEvent(level="INFO", message=f"IP: {orange_ip}"))
-    ui_queue.put(LogEvent(level="INFO", message=f"Control port: {orange_port}"))
+    _put(LogEvent(level="INFO", message=f"Connected to {car['name']}"), allow_drop=True)
+    _put(LogEvent(level="INFO", message=f"IP: {orange_ip}"), allow_drop=True)
+    _put(LogEvent(level="INFO", message=f"Control port: {orange_port}"), allow_drop=True)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dev = None
 
     try:
-        cfg = load_config()
-
-        dev_path = str(getattr(cfg, "moza_dev_path", "")) or "/dev/input/event0"
-        allow_no_moza = bool(getattr(cfg, "allow_no_moza", False))
-        send_hz = int(getattr(cfg, "control_send_hz", SEND_HZ_DEFAULT) or SEND_HZ_DEFAULT)
+        dev_path = str(control_cfg.moza_dev_path or "/dev/input/event0")
+        allow_no_moza = bool(control_cfg.allow_no_moza)
+        send_hz = int(control_cfg.control_send_hz or SEND_HZ_DEFAULT)
         send_hz = max(1, min(send_hz, 1000))
         send_dt = 1.0 / float(send_hz)
 
-        steer_invert = bool(getattr(cfg, "steer_invert", STEER_INVERT_DEFAULT))
-        throttle_invert = bool(getattr(cfg, "throttle_invert", THROTTLE_INVERT_DEFAULT))
-        brake_invert = bool(getattr(cfg, "brake_invert", BRAKE_INVERT_DEFAULT))
+        steer_invert = bool(control_cfg.steer_invert)
+        throttle_invert = bool(control_cfg.throttle_invert)
+        brake_invert = bool(control_cfg.brake_invert)
 
-        steer_gain = float(getattr(cfg, "steer_gain", STEER_GAIN_DEFAULT) or STEER_GAIN_DEFAULT)
-        steer_limit = float(getattr(cfg, "steer_limit", STEER_LIMIT_DEFAULT) or STEER_LIMIT_DEFAULT)
-        steer_deadzone = float(getattr(cfg, "steer_deadzone", STEER_DEADZONE_DEFAULT) or STEER_DEADZONE_DEFAULT)
-        pedal_deadzone = float(getattr(cfg, "pedal_deadzone", PEDAL_DEADZONE_DEFAULT) or PEDAL_DEADZONE_DEFAULT)
+        steer_gain = float(control_cfg.steer_gain or STEER_GAIN_DEFAULT)
+        steer_limit = float(control_cfg.steer_limit or STEER_LIMIT_DEFAULT)
+        steer_deadzone = float(control_cfg.steer_deadzone or STEER_DEADZONE_DEFAULT)
+        pedal_deadzone = float(control_cfg.pedal_deadzone or PEDAL_DEADZONE_DEFAULT)
 
         abs_map: dict[int, Any] | None = None
         try:
             dev, abs_map = open_moza_device(dev_path)
-            ui_queue.put(MozaStateEvent(connected=True))
-            ui_queue.put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"))
+            _put(MozaStateEvent(connected=True), allow_drop=False)
+            _put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"), allow_drop=True)
         except FileNotFoundError as e:
-            ui_queue.put(MozaStateEvent(connected=False))
+            _put(MozaStateEvent(connected=False), allow_drop=False)
             candidates = _list_input_candidates()
             if candidates:
-                ui_queue.put(LogEvent(level="INFO", message="Input candidates:\n- " + "\n- ".join(candidates)))
+                _put(
+                    LogEvent(level="INFO", message="Input candidates:\n- " + "\n- ".join(candidates)),
+                    allow_drop=True,
+                )
             if not allow_no_moza:
                 raise FileNotFoundError(
                     f"MOZA device not found at {dev_path!r}. Set RC_UI_MOZA_DEV_PATH to one of:\n- "
                     + "\n- ".join(candidates or ["(no /dev/input candidates found)"])
                 ) from e
-            ui_queue.put(
+            _put(
                 LogEvent(
                     level="WARN",
                     message=(
                         f"MOZA device not found at {dev_path!r}. Running in no-input mode. "
                         "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
                     ),
-                )
+                ),
+                allow_drop=False,
             )
-            ui_queue.put(LogEvent(level="DEBUG", message=f"MOZA open error: {e}"))
+            _put(LogEvent(level="DEBUG", message=f"MOZA open error: {e}"), allow_drop=True)
         except Exception as e:
-            ui_queue.put(MozaStateEvent(connected=False))
+            _put(MozaStateEvent(connected=False), allow_drop=False)
             if not allow_no_moza:
                 raise
-            ui_queue.put(
+            _put(
                 LogEvent(
                     level="WARN",
                     message=(
                         f"MOZA init failed ({e}). Running in no-input mode. "
                         "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
                     ),
-                )
+                ),
+                allow_drop=False,
             )
 
         steer = 0.0
@@ -224,7 +247,7 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
 
             if now - last_ui >= 0.10:
                 last_ui = now
-                ui_queue.put(
+                _put(
                     TelemetryEvent(
                         payload=TelemetryPayload(
                             steer=steer,
@@ -235,12 +258,13 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
                                 f"steer={steer:+.3f}  gas={gas01:.3f}  brake={brake01:.3f}  -> throttle={throttle:+.3f}"
                             ),
                         ).__dict__
-                    )
+                    ),
+                    allow_drop=True,
                 )
 
     except Exception as e:
-        ui_queue.put(MozaStateEvent(connected=False))
-        ui_queue.put(ErrorEvent(message=f"Control session error: {e}"))
+        _put(MozaStateEvent(connected=False), allow_drop=False)
+        _put(ErrorEvent(message=f"Control session error: {e}"), allow_drop=False)
     finally:
         try:
             stop_msg = f"{time.time():.6f} 0.0000 0.0000"
@@ -256,7 +280,7 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
             except Exception:
                 pass
 
-        ui_queue.put(
+        _put(
             TelemetryEvent(
                 payload=TelemetryPayload(
                     steer=0.0,
@@ -265,8 +289,9 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue) -> None:
                     output=0.0,
                     text="Session stopped",
                 ).__dict__
-            )
+            ),
+            allow_drop=True,
         )
-        ui_queue.put(StatusEvent(summary="Disconnected", detail="", phase=AppPhase.IDLE))
-        ui_queue.put(MozaStateEvent(connected=False))
-        ui_queue.put(SessionStoppedEvent(reason="worker-exit"))
+        _put(StatusEvent(summary="Disconnected", detail="", phase=AppPhase.IDLE), allow_drop=False)
+        _put(MozaStateEvent(connected=False), allow_drop=False)
+        _put(SessionStoppedEvent(reason="worker-exit"), allow_drop=False)
