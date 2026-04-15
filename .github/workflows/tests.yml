@@ -10,6 +10,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system deps (Qt/PySide6 headless)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 \
+            libgl1 \
+            libglib2.0-0 \
+            libxkbcommon0 \
+            libxcb1 \
+            libx11-6 \
+            libxext6 \
+            libxrender1 \
+            libxi6 \
+            libxrandr2 \
+            libxfixes3 \
+            libxss1 \
+            libdbus-1-3 \
+            libfontconfig1 \
+            libfreetype6
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
