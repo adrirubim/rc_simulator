@@ -6,7 +6,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoWin = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+function Normalize-FileSystemPath([string]$PathValue) {
+  $p = ([string]$PathValue).Trim()
+  $prefix = "Microsoft.PowerShell.Core\FileSystem::"
+  if ($p.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $p.Substring($prefix.Length)
+  }
+  return $p
+}
+
+$repoWin = Normalize-FileSystemPath (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not (Test-Path -LiteralPath $repoWin)) {
   throw "Repo path not found: $repoWin"
 }
@@ -41,7 +50,10 @@ function Get-DesktopCandidates() {
   $seen = @{}
   $out = @()
   foreach ($c in $candidates) {
-    $k = ($c ?? "").Trim().ToLowerInvariant()
+    # PowerShell 5.1 compatibility: no null-coalescing operator (??).
+    $v = ""
+    if ($null -ne $c) { $v = [string]$c }
+    $k = $v.Trim().ToLowerInvariant()
     if ($k.Length -eq 0) { continue }
     if ($seen.ContainsKey($k)) { continue }
     $seen[$k] = $true
@@ -119,23 +131,62 @@ if ($Distro.Trim().Length -gt 0) {
   $distroArg = "-d `"$Distro`" "
 }
 
-# Use bash -lc to ensure a consistent shell.
-$args = "$distroArg-e bash -lc " + ('"' + ($bashCommand -replace '"','\"') + '"')
-
 $shortcutPath = Pick-DesktopPath -Name $ShortcutName
+$runnerCmd = Join-Path $repoWin "ops\\windows\\run_rc_simulator.cmd"
+if (-not (Test-Path -LiteralPath $runnerCmd)) {
+  throw "Missing runner script: $runnerCmd"
+}
 
 $shell = New-Object -ComObject WScript.Shell
 $sc = $shell.CreateShortcut($shortcutPath)
-$sc.TargetPath = $wsl
-$sc.Arguments = $args
+$cmdExe = (Get-Command cmd.exe -ErrorAction Stop).Source
+$sc.TargetPath = $cmdExe
+# Shortcuts require an executable target; run the wrapper via cmd.exe /c.
+$d = ""
+if ($null -ne $Distro) { $d = [string]$Distro }
+$w = ""
+if ($null -ne $wslRepoPath) { $w = [string]$wslRepoPath }
+# Use /k so the console stays open and errors are visible.
+
+# cmd.exe is unreliable with UNC targets (\\wsl.localhost\...). Cache the runner script locally.
+try {
+  $cacheDir = Join-Path $env:LOCALAPPDATA "rc_simulator"
+  New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+  $cachedRunner = Join-Path $cacheDir "run_rc_simulator.cmd"
+  Copy-Item -LiteralPath $runnerCmd -Destination $cachedRunner -Force
+  # Persist args for the runner (avoids cmd.exe quoting edge cases).
+  $cfg = Join-Path $cacheDir "runner.env"
+  Set-Content -LiteralPath $cfg -Value @(
+    "DISTRO=$d"
+    "WSL_REPO_PATH=$w"
+  ) -Encoding ASCII -Force
+} catch {
+  $cachedRunner = $runnerCmd
+}
+
+# cmd.exe parsing is extremely picky when the command starts with a quoted path.
+# Keep the shortcut arguments minimal and load args from runner.env.
+$runnerEsc = ($cachedRunner -replace '"','\"')
+$sc.Arguments = '/k ""' + $runnerEsc + '""'
 $sc.WorkingDirectory = (Split-Path -Parent $shortcutPath)
 $sc.WindowStyle = 1
-$sc.Description = "Launch RC Simulator via WSL"
+$sc.Description = "Launch RC Simulator via WSL (with log on failure)"
 
 # Windows shortcuts don't support SVG icons. If an .ico is present, use it.
 $iconPath = Join-Path $repoWin "assets\\icons\\rc-simulator.ico"
 if (Test-Path -LiteralPath $iconPath) {
-  $sc.IconLocation = "$iconPath,0"
+  # Shortcuts can fail to resolve icons from UNC/WSL paths.
+  # Copy the icon to a local Windows folder and point the shortcut there.
+  try {
+    $cacheDir = Join-Path $env:LOCALAPPDATA "rc_simulator"
+    New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+    $cachedIcon = Join-Path $cacheDir "rc-simulator.ico"
+    Copy-Item -LiteralPath $iconPath -Destination $cachedIcon -Force
+    $sc.IconLocation = "$cachedIcon,0"
+  } catch {
+    # Best-effort fallback.
+    $sc.IconLocation = "$iconPath,0"
+  }
 }
 $sc.Save()
 

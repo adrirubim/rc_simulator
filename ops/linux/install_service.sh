@@ -12,7 +12,7 @@ print_usage() {
 Install RC Simulator systemd service (Linux).
 
 Usage:
-  ops/linux/install_service.sh [--user USER] [--repo PATH] [--display VALUE] [--xauthority PATH] [--python PATH]
+  ops/linux/install_service.sh [--user USER] [--repo PATH] [--display VALUE] [--xauthority PATH] [--python PATH] [--dry-run]
 
 Options:
   --user        Linux user to run the service as (default: $SUDO_USER or $USER)
@@ -20,6 +20,7 @@ Options:
   --display     DISPLAY value (default: :0)
   --xauthority  XAUTHORITY path (default: %h/.Xauthority)
   --python      Python executable (default: /usr/bin/python3)
+  --dry-run     Print actions without executing
   -h, --help    Show this help
 EOF
 }
@@ -28,6 +29,7 @@ USER_NAME="${SUDO_USER:-${USER:-}}"
 DISPLAY_VALUE=":0"
 XAUTHORITY_VALUE="%h/.Xauthority"
 PYTHON_PATH="/usr/bin/python3"
+dry_run=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +53,10 @@ while [[ $# -gt 0 ]]; do
       PYTHON_PATH="${2:-}"
       shift 2
       ;;
+    --dry-run)
+      dry_run=true
+      shift
+      ;;
     -h|--help)
       print_usage
       exit 0
@@ -62,6 +68,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+run() {
+  if $dry_run; then
+    echo "+ $*"
+    return 0
+  fi
+  "$@"
+}
 
 if [[ -z "${USER_NAME}" ]]; then
   echo "Error: --user is required (could not infer from environment)." >&2
@@ -91,11 +105,11 @@ sed \
   -e "s|@PYTHON@|${PYTHON_PATH}|g" \
   "${TEMPLATE_PATH}" > "${tmp}"
 
-sudo cp "${tmp}" "${TARGET_PATH}"
-sudo chmod 0644 "${TARGET_PATH}"
+run sudo cp "${tmp}" "${TARGET_PATH}"
+run sudo chmod 0644 "${TARGET_PATH}"
 
-sudo systemctl daemon-reload
-sudo systemctl enable "${SERVICE_NAME}"
-sudo systemctl restart "${SERVICE_NAME}"
+run sudo systemctl daemon-reload
+run sudo systemctl enable "${SERVICE_NAME}"
+run sudo systemctl restart "${SERVICE_NAME}"
 
 echo "Installed and restarted: ${SERVICE_NAME}"

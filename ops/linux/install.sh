@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 print_usage() {
   cat <<'EOF'
 RC Simulator installer (Linux/WSL).
 
 Usage:
-  ops/install.sh [--all | --launcher | --service] [--user USER] [--repo PATH] [--dry-run]
+  ops/linux/install.sh [--all | --launcher | --service] [--user USER] [--repo PATH] [--dry-run]
 
 Options:
   --all       Install everything available (service + launcher if supported)

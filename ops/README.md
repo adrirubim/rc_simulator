@@ -11,14 +11,14 @@ Scripts and assets for deployment / OS integration.
 
 ### One-command install
 
-- Linux/WSL: `ops/install.sh --all` (installs launcher; installs systemd service if systemd is running)
-- Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File ops/install.ps1`
+- Linux/WSL: `ops/linux/install.sh --all` (installs launcher; installs systemd service if systemd is running)
+- Windows: `ops/windows/install_shortcut.cmd` (recommended; creates a Desktop shortcut that launches via WSL with logs on failure)
 
 ### "Double click" install
 
-- Windows: double-click `ops/install.cmd`
-- Linux: make it executable once (`chmod +x ops/install.sh`), then double-click `ops/install.sh` and choose "Run"
-- Note (Windows Explorer): if file extensions are hidden, you may see multiple files named `install`. Use `install.cmd` (not `install.ps1` or `install.sh`).
+- Windows (recommended): double-click `ops/windows/install_shortcut.cmd`
+- Linux: make it executable once (`chmod +x ops/linux/install.sh`), then double-click `ops/linux/install.sh` and choose "Run"
+- Note (Windows Explorer): if file extensions are hidden, make sure you're running `install_shortcut.cmd` (not the `.ps1`).
 
 ### `ops/linux/`
 
@@ -32,6 +32,7 @@ Scripts and assets for deployment / OS integration.
 ### `ops/windows/`
 
 - `install_shortcut.ps1`: creates a Windows Desktop shortcut that launches the app via WSL.
+- `run_rc_simulator.cmd`: runner used by the shortcut; captures logs to `%TEMP%\rc_simulator_run.log` and mirrors to the Desktop on failure.
 - `uninstall_shortcut.ps1`: removes the shortcut.
 - `install_shortcut.cmd`: double-click installer (wraps the `.ps1`).
 - `uninstall_shortcut.cmd`: double-click uninstaller (wraps the `.ps1`).
