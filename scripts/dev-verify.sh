@@ -11,14 +11,19 @@ fi
 source .venv/bin/activate
 
 python -m pip install -U pip
-python -m pip install -e ".[dev]"
+if [[ -f "requirements-dev.lock" ]]; then
+  # Reproducible dev environment: constrain transitive dependencies.
+  python -m pip install -c requirements-dev.lock -e ".[dev]"
+else
+  python -m pip install -e ".[dev]"
+fi
 
 rm -rf src/*.egg-info src/**/*.egg-info 2>/dev/null || true
 
 python3 scripts/audit_layout.py
 
 ruff format --check .
-ruff check --fix .
+ruff check .
 
 pytest -q
 

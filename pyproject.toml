@@ -14,12 +14,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Dependencias opcionales que dependen del SO / entorno.
-# El video embebido usa GI/GStreamer (normalmente provisto por el sistema en Linux).
+# Optional dependencies that depend on OS / environment.
+# Embedded video uses GI/GStreamer (typically provided by system packages on Linux).
 video = []
 dev = [
   "ruff>=0.6",
   "pytest>=8",
+  # Reproducible dev envs / supply chain
+  "pip-tools>=7",
+  "pip-audit>=2.7",
+  "cyclonedx-bom>=4.7",
 ]
 
 [tool.setuptools]

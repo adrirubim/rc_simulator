@@ -19,15 +19,6 @@ def _configure_high_dpi() -> None:
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
 
-    # Best-effort Qt attributes (safe even if env vars are ignored).
-    try:
-        from PySide6.QtCore import Qt  # type: ignore
-        from PySide6.QtWidgets import QApplication  # type: ignore
-
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    except Exception:
-        pass
-
 
 def _configure_qpa_platform() -> None:
     """

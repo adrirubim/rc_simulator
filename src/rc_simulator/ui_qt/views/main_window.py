@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -616,10 +617,13 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(root)
 
-        # Fade overlay (cinematic transitions without QGraphicsOpacityEffect).
+        # Fade overlay (cinematic transitions).
         self._fade_overlay = QWidget(self)
         self._fade_overlay.setObjectName("fadeOverlay")
         self._fade_overlay.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._fade_overlay_effect = QGraphicsOpacityEffect(self._fade_overlay)
+        self._fade_overlay_effect.setOpacity(0.0)
+        self._fade_overlay.setGraphicsEffect(self._fade_overlay_effect)
         self._fade_overlay.hide()
         self._set_fade_overlay_alpha(0.0)
 
@@ -831,6 +835,18 @@ class MainWindow(QMainWindow):
     def apply_layout(self, layout_id: str) -> None:
         if self.settings is None:
             return
+        # No-op if already in the requested layout.
+        # This avoids unnecessary fade transitions (and potential flicker) when buttons are clicked
+        # repeatedly or when a layout is re-applied by state changes.
+        try:
+            want = str(layout_id or "").strip().upper()
+            if want not in ("A", "B", "C", "D"):
+                want = "A"
+            cur = str(getattr(self, "_layout_id", "") or "").strip().upper()
+            if cur and cur == want:
+                return
+        except Exception:
+            pass
         # Avoid re-entrant transitions (e.g., repeated hotkeys).
         if self._layout_transition_in_progress:
             self._layout_transition_queued = layout_id
@@ -1123,7 +1139,8 @@ class MainWindow(QMainWindow):
         # Single source of truth for the current overlay alpha.
         self._fade_overlay_alpha = float(a)
         # Obsidian fade. Keep it subtle (not pure black).
-        # Use windowOpacity to avoid setStyleSheet() per frame (repolish/repaint heavy).
+        # Use QGraphicsOpacityEffect to avoid setStyleSheet() per frame (repolish/repaint heavy),
+        # while still working correctly for non-top-level widgets.
         alpha = float(a)
         if alpha > 0:
             # Ensure geometry is valid before showing; otherwise some platforms
@@ -1134,7 +1151,11 @@ class MainWindow(QMainWindow):
                 pass
             self._fade_overlay.show()
             self._fade_overlay.raise_()
-        self._fade_overlay.setWindowOpacity(alpha)
+        try:
+            if self._fade_overlay_effect is not None:
+                self._fade_overlay_effect.setOpacity(alpha)
+        except Exception:
+            pass
         if alpha <= 0:
             self._fade_overlay.hide()
 
@@ -1243,11 +1264,25 @@ class MainWindow(QMainWindow):
             pass
 
     def _copy_diagnostics(self) -> None:
+        text = self._build_diagnostics_text()
+        try:
+            cb = QApplication.clipboard()
+            cb.setText(text)
+        except Exception:
+            pass
+
+    def _build_diagnostics_text(self) -> str:
         parts: list[str] = []
         try:
             parts.append(f"app=rc-simulator {metadata.version('rc-simulator')}")
         except Exception:
             parts.append("app=rc-simulator (version unknown)")
+        try:
+            import sys
+
+            parts.append(f"python={sys.version.split()[0]}")
+        except Exception:
+            pass
         try:
             parts.append(f"qt_platform={QGuiApplication.platformName()}")
         except Exception:
@@ -1256,23 +1291,51 @@ class MainWindow(QMainWindow):
             import os
 
             parts.append(f"QT_QPA_PLATFORM={os.environ.get('QT_QPA_PLATFORM', '')}")
+            parts.append(f"XDG_SESSION_TYPE={os.environ.get('XDG_SESSION_TYPE', '')}")
+            parts.append(f"WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY', '')}")
         except Exception:
             pass
         try:
             parts.append(f"theme={self.settings_theme.currentText()}")
             parts.append(f"density={self.settings_density.currentText()}")
-            parts.append(f"layout={self.settings.value('layout_id', 'A') if self.settings is not None else 'A'}")
+            parts.append(f"layout={self._layout_id}")
+            parts.append(f"phase={self.phase.name}")
+            parts.append(f"is_connected={int(bool(self.is_connected))}")
+            parts.append(f"is_scanning={int(bool(self.is_scanning))}")
+            parts.append(f"is_connecting={int(bool(self.is_connecting))}")
             parts.append(f"retry_profile={self._video_retry_profile}")
+            parts.append(f"video_retry_seq={self._video_retry_seq}")
             parts.append(f"log_visible={self.settings_log_visible.currentText()}")
             parts.append(f"log_store={self.settings_log_store.currentText()}")
         except Exception:
             pass
-        text = "\n".join(parts).strip() + "\n"
         try:
-            cb = QApplication.clipboard()
-            cb.setText(text)
+            q = getattr(self.controller, "events", None)
+            if q is not None:
+                qsize = None
+                maxsize = None
+                try:
+                    qsize = q.qsize()
+                except Exception:
+                    qsize = None
+                try:
+                    maxsize = getattr(q, "maxsize", None)
+                except Exception:
+                    maxsize = None
+                if qsize is not None:
+                    parts.append(f"events_qsize={qsize}")
+                if maxsize is not None:
+                    parts.append(f"events_maxsize={maxsize}")
         except Exception:
             pass
+        try:
+            dropped = int(getattr(self.controller, "events_dropped", 0) or 0)
+            dropped_oldest = int(getattr(self.controller, "events_drop_oldest", 0) or 0)
+            parts.append(f"events_dropped={dropped}")
+            parts.append(f"events_drop_oldest={dropped_oldest}")
+        except Exception:
+            pass
+        return "\n".join([p for p in parts if str(p).strip()]).strip() + "\n"
 
     # ---------------- Core actions ----------------
     def start_scan(self) -> None:
@@ -2026,8 +2089,6 @@ class MainWindow(QMainWindow):
                 self._shutdown_overlay.show()
                 self._shutdown_overlay.raise_()
                 try:
-                    from PySide6.QtWidgets import QApplication
-
                     QApplication.processEvents()
                 except Exception:
                     pass

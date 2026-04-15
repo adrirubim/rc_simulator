@@ -97,14 +97,30 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: Cont
         except Exception as e:
             if isinstance(e, queue.Full):
                 if allow_drop:
+                    try:
+                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
                     return
                 try:
                     _ = ui_queue.get_nowait()
+                    try:
+                        ui_queue.events_drop_oldest += 1  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
                 except Exception:
+                    try:
+                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
                     return
                 try:
                     ui_queue.put_nowait(ev)
                 except Exception:
+                    try:
+                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
                     return
             return
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import time
 from typing import Any
@@ -18,6 +19,34 @@ DISCOVERY_STALE_S = 3.0
 DEFAULT_CONTROL_PORT = 5005
 
 
+def _pick_discovery_bind_ip() -> str:
+    """
+    Choose a safe default bind IP for UDP discovery.
+
+    CodeQL flags binding to all interfaces (0.0.0.0). For LAN discovery we usually only need
+    the "primary" local interface address. Operators can override via RC_DISCOVERY_BIND_IP.
+    """
+    explicit = str(os.getenv("RC_DISCOVERY_BIND_IP", "") or "").strip()
+    if explicit:
+        return explicit
+
+    # Best-effort: discover the primary local IPv4 without sending packets.
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = str(s.getsockname()[0] or "").strip()
+            if ip:
+                return ip
+        finally:
+            s.close()
+    except Exception:
+        pass
+
+    # Conservative fallback: loopback (won't discover LAN cars, but avoids opening the port on all NICs).
+    return "127.0.0.1"
+
+
 def discover_cars(*, timeout_s: float = DISCOVERY_TIMEOUT_S, stop_event=None) -> dict[str, Car]:
     """
     Listen for UDP broadcast beacons and build a list of live cars.
@@ -28,7 +57,7 @@ def discover_cars(*, timeout_s: float = DISCOVERY_TIMEOUT_S, stop_event=None) ->
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("", DISCOVERY_PORT))
+        sock.bind((_pick_discovery_bind_ip(), DISCOVERY_PORT))
         sock.settimeout(0.5)
 
         t0 = time.time()

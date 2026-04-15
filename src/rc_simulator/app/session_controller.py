@@ -25,6 +25,8 @@ class SessionController:
     drive_thread: threading.Thread | None = None
     stop_event: threading.Event | None = None
     control_cfg: ControlConfig = ControlConfig()
+    events_dropped: int = 0
+    events_drop_oldest: int = 0
 
     def _put_event(self, ev: UiEvent, *, allow_drop: bool) -> None:
         """
@@ -38,14 +40,18 @@ class SessionController:
             return
         except queue.Full:
             if allow_drop:
+                self.events_dropped += 1
                 return
         try:
             _ = self.events.get_nowait()
+            self.events_drop_oldest += 1
         except Exception:
+            self.events_dropped += 1
             return
         try:
             self.events.put_nowait(ev)
         except Exception:
+            self.events_dropped += 1
             return
 
     @classmethod
