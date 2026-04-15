@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import queue
 import select
 import socket
 import time
@@ -11,6 +10,7 @@ from evdev import InputDevice, ecodes
 
 from ..core.control_config import ControlConfig
 from ..core.events import ErrorEvent, LogEvent, MozaStateEvent, SessionStoppedEvent, StatusEvent, TelemetryEvent
+from ..core.queue_utils import put_with_backpressure
 from ..core.state import AppPhase, TelemetryPayload
 from .control_math import apply_deadzone, clamp, norm_axis, norm_trigger
 from .steer_unwrap import SteerUnwrapper
@@ -90,39 +90,21 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: Cont
     orange_ip = car["ip"]
     orange_port = car["control_port"]
 
-    def _put(ev, *, allow_drop: bool) -> None:
+    def _inc_attr(name: str) -> None:
         try:
-            ui_queue.put_nowait(ev)
-            return
-        except Exception as e:
-            if isinstance(e, queue.Full):
-                if allow_drop:
-                    try:
-                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
-                    return
-                try:
-                    _ = ui_queue.get_nowait()
-                    try:
-                        ui_queue.events_drop_oldest += 1  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
-                except Exception:
-                    try:
-                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
-                    return
-                try:
-                    ui_queue.put_nowait(ev)
-                except Exception:
-                    try:
-                        ui_queue.events_dropped += 1  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
-                    return
-            return
+            cur = int(getattr(ui_queue, name))
+            setattr(ui_queue, name, cur + 1)
+        except Exception:
+            pass
+
+    def _put(ev, *, allow_drop: bool) -> None:
+        put_with_backpressure(
+            ui_queue,
+            ev,
+            allow_drop=allow_drop,
+            on_drop=lambda: _inc_attr("events_dropped"),
+            on_drop_oldest=lambda: _inc_attr("events_drop_oldest"),
+        )
 
     _put(
         StatusEvent(

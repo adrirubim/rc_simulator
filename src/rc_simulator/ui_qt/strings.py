@@ -151,14 +151,12 @@ class UiStrings:
     overlay_waiting_connection: str = "Waiting for connection…"
     overlay_no_active_session: str = "No active session."
     overlay_video_not_available: str = "Video not available"
-    overlay_missing_deps: str = "Missing GI/GStreamer dependencies for embedded video."
+    overlay_missing_deps: str = "Video backend dependencies missing."
     overlay_no_frames: str = "No frames received. Check network/port or retry."
     overlay_retry: str = "Retry"
     video_backend_not_configured: str = "Video: backend not configured."
-    video_backend_not_available: str = "Video: backend not available (GI/GStreamer)."
-    video_deps_hint: str = (
-        "For embedded video install: sudo apt install -y python3-gi gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
-    )
+    video_backend_not_available: str = "Video: backend not available."
+    video_error_help: str = "{message}"
 
     # Misc overlays
     stopping_system: str = "Stopping system…"
@@ -314,15 +312,12 @@ UI_STRINGS_IT = UiStrings(
     overlay_waiting_connection="In attesa di connessione…",
     overlay_no_active_session="Nessuna sessione attiva.",
     overlay_video_not_available="Video non disponibile",
-    overlay_missing_deps="Dipendenze GI/GStreamer mancanti per il video integrato.",
+    overlay_missing_deps="Dipendenze backend video mancanti.",
     overlay_no_frames="Nessun frame ricevuto. Controlla rete/porta o riprova.",
     overlay_retry="Riprova",
     video_backend_not_configured="Video: backend non configurato.",
-    video_backend_not_available="Video: backend non disponibile (GI/GStreamer).",
-    video_deps_hint=(
-        "Per video integrato installa: sudo apt install -y python3-gi "
-        "gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
-    ),
+    video_backend_not_available="Video: backend non disponibile.",
+    video_error_help="{message}",
     stopping_system="Arresto sistema…",
     banner_dismiss_name="Chiudi notifica",
     banner_dismiss_desc="Chiudi e nascondi questa notifica",
@@ -461,15 +456,12 @@ UI_STRINGS_ES = UiStrings(
     overlay_waiting_connection="Esperando conexion…",
     overlay_no_active_session="Sin sesion activa.",
     overlay_video_not_available="Video no disponible",
-    overlay_missing_deps="Faltan dependencias GI/GStreamer para video embebido.",
+    overlay_missing_deps="Faltan dependencias del backend de video.",
     overlay_no_frames="No se recibieron frames. Revisa red/puerto o reintenta.",
     overlay_retry="Reintentar",
     video_backend_not_configured="Video: backend no configurado.",
-    video_backend_not_available="Video: backend no disponible (GI/GStreamer).",
-    video_deps_hint=(
-        "Para video embebido instala: sudo apt install -y python3-gi "
-        "gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
-    ),
+    video_backend_not_available="Video: backend no disponible.",
+    video_error_help="{message}",
     stopping_system="Deteniendo sistema…",
     banner_dismiss_name="Cerrar aviso",
     banner_dismiss_desc="Cerrar y ocultar esta notificacion",

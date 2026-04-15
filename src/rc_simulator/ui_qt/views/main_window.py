@@ -47,7 +47,7 @@ from ...core.events import (
 from ...core.models import Car
 from ...core.settings import SettingsStore
 from ...core.state import AppPhase
-from ...ports.video import VideoFrame, VideoReceiver, VideoReceiverFactory
+from ...ports.video import VideoError, VideoErrorCode, VideoFrame, VideoReceiver, VideoReceiverFactory
 from ..components.banner import build_banner
 from ..components.docks import build_debug_docks, build_log_panel
 from ..components.header import build_header
@@ -1833,9 +1833,12 @@ class MainWindow(QMainWindow):
         )
 
     def _show_video_requirements_hint(self) -> None:
+        msg = str(getattr(self, "_video_last_help_message", "") or "").strip()
+        if not msg:
+            msg = UI.video_not_available
         self._show_banner(
             "muted",
-            (UI.video_deps_hint),
+            UI.video_error_help.format(message=msg),
             auto_hide_ms=12_000,
         )
 
@@ -2143,8 +2146,10 @@ class MainWindow(QMainWindow):
 
             QTimer.singleShot(0, _apply)
 
-        def on_error(msg: str) -> None:
+        def on_error(err: VideoError) -> None:
             def _apply_err() -> None:
+                msg = str(getattr(err, "message", "") or "")
+                code = getattr(err, "code", None)
                 self._append_log_rate_limited("WARN", msg, key="video-error", min_interval_ms=2500)
                 self.video_view.setText(UI.video_not_available)
                 self.badge_video.setText(UI.badge_video_off)
@@ -2152,18 +2157,17 @@ class MainWindow(QMainWindow):
                 self.hud_video.setText(UI.badge_video_off)
                 self._set_badge_kind(self.hud_video, "muted")
                 self.video_view.setPixmap(QPixmap())
-                # Show requirements only when GI/GStreamer is missing.
-                lowered = str(msg).lower()
-                missing_deps = ("gstreamer not available" in lowered) or ("gi/gstreamer" in lowered)
+                missing_deps = code == VideoErrorCode.MISSING_DEPENDENCIES
                 self._video_missing_deps = bool(missing_deps)
                 self.btn_video_help.setVisible(bool(missing_deps))
-                # If GI/GStreamer is missing, retries are pointless.
                 if missing_deps:
+                    self._video_last_help_message = msg
+                    # Backend-provided message contains the actionable hint.
                     self._video_retry_enabled = False
                     self._append_log_rate_limited(
                         "INFO",
-                        UI.video_deps_hint,
-                        key="video-deps-hint",
+                        UI.video_error_help.format(message=msg),
+                        key="video-error-help",
                         min_interval_ms=30_000,
                     )
                     return
@@ -2173,7 +2177,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, _apply_err)
 
         if self._video_receiver_factory is None:
-            on_error(UI.video_backend_not_configured)
+            on_error(VideoError(code=VideoErrorCode.UNKNOWN_ERROR, message=UI.video_backend_not_configured))
             return
 
         self._video_receiver = self._video_receiver_factory(
@@ -2184,7 +2188,7 @@ class MainWindow(QMainWindow):
         )
         ok = self._video_receiver.start()
         if not ok:
-            on_error(UI.video_backend_not_available)
+            on_error(VideoError(code=VideoErrorCode.CONNECTION_FAILED, message=UI.video_backend_not_available))
 
     def _stop_video(self) -> None:
         self._video_retry_seq += 1

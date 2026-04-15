@@ -58,7 +58,8 @@ def discover_cars(*, timeout_s: float = DISCOVERY_TIMEOUT_S, stop_event=None) ->
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((_pick_discovery_bind_ip(), DISCOVERY_PORT))
-        sock.settimeout(0.5)
+        # Fast cancellation: keep socket timeout short so stop_event is honored quickly.
+        sock.settimeout(0.1)
 
         t0 = time.time()
 

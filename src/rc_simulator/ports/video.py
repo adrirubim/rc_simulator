@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
 
 
@@ -11,6 +12,19 @@ class VideoFrame:
     width: int
     height: int
     rgb_bytes: bytes  # packed BGRA (BGRA8888)
+
+
+class VideoErrorCode(StrEnum):
+    SUCCESS = "success"
+    MISSING_DEPENDENCIES = "missing_dependencies"
+    CONNECTION_FAILED = "connection_failed"
+    UNKNOWN_ERROR = "unknown_error"
+
+
+@dataclass(frozen=True)
+class VideoError:
+    code: VideoErrorCode
+    message: str
 
 
 class VideoReceiver(ABC):
@@ -28,5 +42,5 @@ class VideoReceiverFactory(Protocol):
         port: int,
         latency_ms: int,
         on_frame: Callable[[VideoFrame], None],
-        on_error: Callable[[str], None],
+        on_error: Callable[[VideoError], None],
     ) -> VideoReceiver: ...

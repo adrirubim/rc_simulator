@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 
-from ..ports.video import VideoFrame, VideoReceiver
+from ..ports.video import VideoError, VideoErrorCode, VideoFrame, VideoReceiver
 
 
 class GstVideoReceiver(VideoReceiver):
@@ -20,7 +20,7 @@ class GstVideoReceiver(VideoReceiver):
         port: int,
         latency_ms: int,
         on_frame: Callable[[VideoFrame], None],
-        on_error: Callable[[str], None],
+        on_error: Callable[[VideoError], None],
     ):
         self.port = int(port)
         self.latency_ms = int(latency_ms)
@@ -34,19 +34,28 @@ class GstVideoReceiver(VideoReceiver):
         self._stop_bus = threading.Event()
 
     def start(self) -> bool:
+        install_hint = (
+            "For embedded video install: sudo apt install -y python3-gi gstreamer1.0-plugins-base "
+            "gstreamer1.0-plugins-good"
+        )
         try:
             import gi  # type: ignore
 
             gi.require_version("Gst", "1.0")
             from gi.repository import Gst  # type: ignore
         except Exception as e:
-            self.on_error(f"GStreamer not available: {e}")
+            self.on_error(
+                VideoError(
+                    code=VideoErrorCode.MISSING_DEPENDENCIES,
+                    message=f"Video backend dependencies are missing. {install_hint}\n\nDetails: {e}",
+                )
+            )
             return False
 
         try:
             Gst.init(None)
         except Exception as e:
-            self.on_error(f"GStreamer init error: {e}")
+            self.on_error(VideoError(code=VideoErrorCode.UNKNOWN_ERROR, message=f"Video backend init error: {e}"))
             return False
 
         # Optimized H264/RTP pipeline (low-latency, fail-soft).
@@ -67,7 +76,12 @@ class GstVideoReceiver(VideoReceiver):
             pipeline = Gst.parse_launch(desc)
             appsink = pipeline.get_by_name("sink")
             if appsink is None:
-                self.on_error("Invalid video pipeline (missing appsink).")
+                self.on_error(
+                    VideoError(
+                        code=VideoErrorCode.UNKNOWN_ERROR,
+                        message="Invalid video pipeline (missing sink).",
+                    )
+                )
                 return False
 
             def _on_new_sample(sink):
@@ -108,11 +122,11 @@ class GstVideoReceiver(VideoReceiver):
             self._stop_bus.clear()
 
             def _bus_watch() -> None:
-                def _emit_error(msg: str) -> None:
+                def _emit_error(err: VideoError) -> None:
                     # Suppress errors during shutdown to avoid noisy logs on app close.
                     if self._stop_bus.is_set() or (not self._running):
                         return
-                    self.on_error(msg)
+                    self.on_error(err)
 
                 try:
                     mask = Gst.MessageType.ERROR | Gst.MessageType.EOS
@@ -124,17 +138,27 @@ class GstVideoReceiver(VideoReceiver):
                         if msg is None:
                             continue
                         if msg.type == Gst.MessageType.EOS:
-                            _emit_error("Video: stream ended (EOS).")
+                            _emit_error(
+                                VideoError(
+                                    code=VideoErrorCode.CONNECTION_FAILED,
+                                    message="Video stream ended (EOS).",
+                                )
+                            )
                             break
                         if msg.type == Gst.MessageType.ERROR:
                             err, dbg = msg.parse_error()
                             details = f"{err}"
                             if dbg:
                                 details = f"{details} ({dbg})"
-                            _emit_error(f"Video: GStreamer error: {details}")
+                            _emit_error(
+                                VideoError(
+                                    code=VideoErrorCode.CONNECTION_FAILED,
+                                    message=f"Video stream error: {details}",
+                                )
+                            )
                             break
                 except Exception as e:
-                    _emit_error(f"Video: bus monitor error: {e}")
+                    _emit_error(VideoError(code=VideoErrorCode.UNKNOWN_ERROR, message=f"Video monitor error: {e}"))
                 finally:
                     # Best-effort cleanup; UI side handles retry scheduling.
                     try:
@@ -149,7 +173,7 @@ class GstVideoReceiver(VideoReceiver):
             pipeline.set_state(Gst.State.PLAYING)
             return True
         except Exception as e:
-            self.on_error(f"Unable to start video pipeline: {e}")
+            self.on_error(VideoError(code=VideoErrorCode.CONNECTION_FAILED, message=f"Unable to start video: {e}"))
             self._pipeline = None
             self._running = False
             return False
