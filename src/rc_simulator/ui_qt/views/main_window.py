@@ -2124,7 +2124,7 @@ class MainWindow(QMainWindow):
         def on_frame(frame: VideoFrame) -> None:
             # Called from GI thread context -> marshal to Qt thread.
             def _apply() -> None:
-                img = QImage(frame.rgb_bytes, frame.width, frame.height, QImage.Format_BGRA8888)
+                img = QImage(frame.rgb_bytes, frame.width, frame.height, QImage.Format_BGRA8888).copy()
                 base = QPixmap.fromImage(img)
                 self._last_video_pixmap = base
 

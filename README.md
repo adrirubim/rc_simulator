@@ -45,7 +45,9 @@ Use these commands from the **repository root** as your main entrypoints:
 | Command | Purpose | Notes |
 |--------|---------|-------|
 | `./scripts/dev-verify.sh` | **Full validation** (CI parity) | Creates venv if missing, installs deps, runs audit + ruff + pytest |
-| `python -m rc_simulator` | **Run the app** | Requires a GUI-capable environment (Linux desktop or WSLg) |
+| `python -m rc_simulator` | **Run (UI mode)** | Qt/PySide6 app. Requires a GUI-capable environment (Linux desktop or WSLg). |
+| `python -m rc_simulator.__main_headless__ --help` | **Run (headless mode)** | Ops/systemd entrypoint: MOZA/UDP without Qt/PySide6. |
+| `python scripts/moza_udp_client.py` | **Compatibility shim** | Thin wrapper that launches `python -m rc_simulator` without importing UI modules. |
 | `ops/linux/install.sh --all` | **One-command install (Linux/WSL)** | Installs launcher; installs systemd service if systemd is running |
 | `ops/windows/install_shortcut.cmd` | **Install desktop shortcut (Windows)** | Recommended. Creates a Desktop shortcut that launches via WSL and writes logs on failure |
 | `ops/linux/install_launcher.sh` | **Install desktop launcher** | Linux only (writes a `.desktop` entry) |
@@ -63,7 +65,9 @@ RC Simulator is a Qt UI that coordinates:
 
 ### Key Highlights
 
-- **Single official entrypoint:** `python -m rc_simulator`
+- **Two official entrypoints:**
+  - UI mode: `python -m rc_simulator`
+  - Headless ops mode: `python -m rc_simulator.__main_headless__`
 - **CI-parity gate:** `./scripts/dev-verify.sh`
 - **OS integration:** systemd + desktop launcher (Linux) and shortcut installer (Windows via WSL)
 
@@ -90,7 +94,9 @@ RC Simulator is a Qt UI that coordinates:
 ### 🎥 Video & UI
 
 - ✅ Qt UI (PySide6) with clear operational states
+- ✅ Premium UX polish (Obsidian base + cinematic fades + precision HUD)
 - ✅ GStreamer helper (`ops/linux/camera_receive.sh`) for UDP H264 receive
+- ✅ Embedded video adapter is **fail-soft** (app remains operational when video dependencies are missing)
 
 ### 🧰 Operations
 
@@ -241,15 +247,42 @@ Note: this repository expects a standard venv install (`pip install -e ...`) for
 <a id="architecture"></a>
 ## 🏗 Architecture
 
-RC Simulator follows a modular architecture with a clear separation of concerns across UI, app coordination, core types/config, and service logic.
+RC Simulator follows a **Ports & Adapters** style layout with explicit contracts and fail-soft infrastructure.
 
-**High-level flow:**
+### Entrypoints
 
-```text
-Bootstrap -> Qt UI (PySide6) -> Discovery | Control Session | Video (optional)
-                          ↓
-             core/config/state/events + adapters/ports/services
-```
+- **UI mode**: `python -m rc_simulator` → `src/rc_simulator/__main__.py` → `src/rc_simulator/ui_qt/app.py`
+- **Headless mode (ops/systemd)**: `python -m rc_simulator.__main_headless__` → `src/rc_simulator/__main_headless__.py`
+- **Shim**: `python scripts/moza_udp_client.py` (wrapper that launches UI mode)
+
+### Layers (package map)
+
+- **`src/rc_simulator/core/` (brains)**: configuration + state + events + models. UI config is env-driven via `RC_UI_*`.
+- **`src/rc_simulator/services/` (domain/service logic)**: discovery + control session worker; publishes `UiEvent` into a queue.
+- **`src/rc_simulator/ports/` (contracts)**: stable interfaces for infrastructure boundaries (e.g. video).
+- **`src/rc_simulator/adapters/` (infrastructure)**: concrete implementations of ports (e.g. GStreamer video receiver).
+- **`src/rc_simulator/app/` (coordination)**: thread ownership, bounded queues, deterministic shutdown.
+- **`src/rc_simulator/ui_qt/` (presentation)**: Qt UI, views, components, and QSS theme.
+
+### Video port contract (stable boundary)
+
+The UI talks to video through `src/rc_simulator/ports/video.py`:
+
+- **Frame format**: `VideoFrame.rgb_bytes` is packed **BGRA (BGRA8888)**.
+- **Structured errors**: `VideoError` with `VideoErrorCode` (`success`, `missing_dependencies`, `connection_failed`, `unknown_error`).
+- **Fail-soft adapter**: the GStreamer adapter (`src/rc_simulator/adapters/video_gst.py`) is safe to import without GI; `start()` returns `False` and reports `VideoErrorCode.MISSING_DEPENDENCIES` when packages are missing, so the app remains usable without video.
+
+### Reliability: deterministic shutdown + bounded UI load
+
+- **Synchronous deterministic shutdown**: `SessionController.shutdown()` signals **separate stop events** for scan and drive workers and then `join()`s threads (best-effort within a timeout). This prevents daemon-thread surprises and makes shutdown predictable.
+- **Backpressure** (`src/rc_simulator/core/queue_utils.py`): if the UI event queue is full, low-priority bursts can be dropped; otherwise the oldest item is dropped and the new one is retried once. The controller keeps counters (`events_dropped`, `events_drop_oldest`) for debugging.
+- **Coalescing** (`src/rc_simulator/ui_qt/views/main_window.py`): telemetry bursts are coalesced per UI tick to the **latest** payload to prevent UI lag under high-frequency updates.
+
+### Premium UX (Obsidian standard)
+
+- **Obsidian base theme**: centralized QSS tokens with a dark “obsidian” palette (not pure black).
+- **Cinematic fade-to-obsidian**: layout transitions use an overlay (`#fadeOverlay`) with animated opacity.
+- **Precision HUD**: monospaced telemetry output + robust `◆/◇` MOZA status glyphs for zero-jump visual stability.
 
 For a more detailed module map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
