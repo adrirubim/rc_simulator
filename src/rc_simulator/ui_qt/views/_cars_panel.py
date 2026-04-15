@@ -7,6 +7,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
 
 from ...core.models import Car
+from ..strings import UI
 
 
 @dataclass(slots=True, weakref_slot=True)
@@ -106,7 +107,7 @@ class CarsPanel:
             title.setObjectName("carTitle")
             tr_l.addWidget(title, 1)
 
-            connected_pill = QLabel("CONNECTED", title_row)
+            connected_pill = QLabel(UI.badge_connected, title_row)
             connected_pill.setObjectName("carConnectedPill")
             connected_pill.setProperty("badge", True)
             connected_pill.setProperty("badgeKind", "ok")

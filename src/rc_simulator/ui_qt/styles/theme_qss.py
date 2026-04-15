@@ -406,6 +406,32 @@ QPushButton#bannerClose:pressed {
   border: 1px solid @BORDER_PRESSED@;
 }
 
+/* ---------- Language selector (3 circular dots) ---------- */
+QToolButton#langDot {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: 999px;
+  padding: 6px 10px;
+  min-width: 40px;
+  min-height: 32px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+QToolButton#langDot:hover {
+  background: @SURFACE@;
+  border: 1px solid @BORDER_HOVER@;
+}
+QToolButton#langDot:checked {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+    stop:0 @CHECKED_STOP0@,
+    stop:1 @CHECKED_STOP1@
+  );
+  border: 1px solid @ACCENT_BORDER@;
+}
+QToolButton#langDot:focus {
+  border: 1px solid @ACCENT_65@;
+}
+
 /* ---------- Lists ---------- */
 QListWidget {
   background: @SURFACE_WEAK@;

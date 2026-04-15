@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
+from ..strings import UI
+
 
 @dataclass(frozen=True)
 class Banner:
@@ -30,8 +32,8 @@ def build_banner(*, parent: QWidget, on_close: Callable[[], None]) -> Banner:
     close = QPushButton("✕", banner)
     close.setObjectName("bannerClose")
     close.clicked.connect(on_close)
-    close.setAccessibleName("Dismiss banner")
-    close.setAccessibleDescription("Close and hide this notification banner")
+    close.setAccessibleName(UI.banner_dismiss_name)
+    close.setAccessibleDescription(UI.banner_dismiss_desc)
     layout.addWidget(close, 0, alignment=Qt.AlignTop)
 
     banner.setVisible(False)

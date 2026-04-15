@@ -8,6 +8,7 @@ from PySide6.QtCore import QEasingCurve, Qt, QTimer, QVariantAnimation
 from PySide6.QtGui import QGuiApplication, QImage, QKeyEvent, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -26,6 +27,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSplitter,
     QStyle,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -50,7 +52,7 @@ from ..components.banner import build_banner
 from ..components.docks import build_debug_docks, build_log_panel
 from ..components.header import build_header
 from ..components.hud import build_hud, format_moza_badge
-from ..strings import UI
+from ..strings import UI, UiStrings, get_ui_strings, normalize_ui_language, set_ui_language
 from ..styles.theme_qss import build_qss
 from ._cars_panel import CarsPanel
 from ._log_panel import LogPanel
@@ -67,6 +69,8 @@ class CarRow:
 
 
 class MainWindow(QMainWindow):
+    SETTINGS_KEY_UI_LANGUAGE = "ui/language"
+
     def __init__(
         self,
         *,
@@ -81,6 +85,11 @@ class MainWindow(QMainWindow):
 
         self.controller = controller
         self.ui_queue = self.controller.events
+
+        # UI language (runtime switchable, persisted).
+        self._ui_language: str = self._read_ui_language()
+        # Set global UI proxy before building widgets that reference `UI.*`.
+        self._ui: UiStrings = set_ui_language(self._ui_language)
 
         self.phase: AppPhase = AppPhase.IDLE
         self.cars: list[Car] = []
@@ -121,7 +130,7 @@ class MainWindow(QMainWindow):
         self._did_initial_window_restore: bool = False
         self._shutdown_overlay: QWidget | None = None
 
-        self.setWindowTitle("RC Simulator")
+        self.setWindowTitle(UI.app_title)
         self.resize(1280, 800)
 
         # Frameless everywhere (enterprise chrome is implemented in our title bar).
@@ -406,7 +415,7 @@ class MainWindow(QMainWindow):
             vo_l.setContentsMargins(16, 16, 16, 16)
             vo_l.setSpacing(10)
         vo_l.addStretch(1)
-        self.video_overlay_title = QLabel("Video", self.video_overlay)
+        self.video_overlay_title = QLabel(UI.overlay_title_video, self.video_overlay)
         self.video_overlay_title.setObjectName("videoOverlayTitle")
         self.video_overlay_title.setAlignment(Qt.AlignHCenter)
         self.video_overlay_body = QLabel("", self.video_overlay)
@@ -507,9 +516,9 @@ class MainWindow(QMainWindow):
         sp_l.setContentsMargins(0, 0, 0, 0)
         sp_l.setSpacing(10 if self.cfg.density != "compact" else 8)
 
-        settings_title = QLabel(UI.settings_title, self.settings_panel)
-        settings_title.setObjectName("title")
-        sp_l.addWidget(settings_title)
+        self.settings_title = QLabel(UI.settings_title, self.settings_panel)
+        self.settings_title.setObjectName("title")
+        sp_l.addWidget(self.settings_title)
 
         # Scrollable content keeps Settings usable in small windows.
         settings_scroll = QScrollArea(self.settings_panel)
@@ -523,66 +532,100 @@ class MainWindow(QMainWindow):
         sc_l.setContentsMargins(0, 0, 0, 0)
         sc_l.setSpacing(12 if self.cfg.density != "compact" else 10)
 
-        display_box = QGroupBox(UI.settings_section_display, settings_content)
-        display_form = QFormLayout(display_box)
+        self.settings_display_box = QGroupBox(UI.settings_section_display, settings_content)
+        display_form = QFormLayout(self.settings_display_box)
         display_form.setHorizontalSpacing(12)
         display_form.setVerticalSpacing(10)
 
-        behavior_box = QGroupBox(UI.settings_section_behavior, settings_content)
-        behavior_form = QFormLayout(behavior_box)
+        self.settings_behavior_box = QGroupBox(UI.settings_section_behavior, settings_content)
+        behavior_form = QFormLayout(self.settings_behavior_box)
         behavior_form.setHorizontalSpacing(12)
         behavior_form.setVerticalSpacing(10)
 
-        video_box = QGroupBox(UI.settings_section_video, settings_content)
-        video_form = QFormLayout(video_box)
+        self.settings_video_box = QGroupBox(UI.settings_section_video, settings_content)
+        video_form = QFormLayout(self.settings_video_box)
         video_form.setHorizontalSpacing(12)
         video_form.setVerticalSpacing(10)
 
-        logs_box = QGroupBox(UI.settings_section_logs, settings_content)
-        logs_form = QFormLayout(logs_box)
+        self.settings_logs_box = QGroupBox(UI.settings_section_logs, settings_content)
+        logs_form = QFormLayout(self.settings_logs_box)
         logs_form.setHorizontalSpacing(12)
         logs_form.setVerticalSpacing(10)
 
-        self.settings_theme = QComboBox(display_box)
-        self.settings_theme.addItems(["slate", "glass"])
+        self.settings_theme = QComboBox(self.settings_display_box)
+        self.settings_theme.clear()
+        self.settings_theme.addItem(UI.settings_theme_slate, "slate")
+        self.settings_theme.addItem(UI.settings_theme_glass, "glass")
         self.settings_theme.setToolTip(UI.settings_tooltip_theme)
-        self.settings_density = QComboBox(display_box)
-        self.settings_density.addItems(["normal", "compact"])
+        self.settings_density = QComboBox(self.settings_display_box)
+        self.settings_density.clear()
+        self.settings_density.addItem(UI.settings_density_normal, "normal")
+        self.settings_density.addItem(UI.settings_density_compact, "compact")
         self.settings_density.setToolTip(UI.settings_tooltip_density)
-        self.settings_auto_scan = QCheckBox(UI.settings_auto_scan, behavior_box)
+        self.settings_auto_scan = QCheckBox(UI.settings_auto_scan, self.settings_behavior_box)
         self.settings_auto_scan.setToolTip(UI.settings_tooltip_auto_scan)
-        self.settings_auto_connect_single = QCheckBox(UI.settings_auto_connect_single, behavior_box)
+        self.settings_auto_connect_single = QCheckBox(UI.settings_auto_connect_single, self.settings_behavior_box)
         self.settings_auto_connect_single.setToolTip(UI.settings_tooltip_auto_connect_single)
-        self.settings_video_latency = QSpinBox(video_box)
+        self.settings_video_latency = QSpinBox(self.settings_video_box)
         self.settings_video_latency.setRange(0, 250)
         self.settings_video_latency.setSingleStep(10)
         self.settings_video_latency.setSuffix(" ms")
         self.settings_video_latency.setToolTip(UI.settings_tooltip_receiver_latency)
 
-        self.settings_retry_profile = QComboBox(video_box)
-        self.settings_retry_profile.addItems(["stable", "aggressive"])
+        self.settings_retry_profile = QComboBox(self.settings_video_box)
+        self.settings_retry_profile.clear()
+        self.settings_retry_profile.addItem(UI.settings_retry_stable, "stable")
+        self.settings_retry_profile.addItem(UI.settings_retry_aggressive, "aggressive")
         self.settings_retry_profile.setToolTip(UI.settings_tooltip_retry_profile)
 
-        self.settings_log_visible = QComboBox(logs_box)
+        self.settings_log_visible = QComboBox(self.settings_logs_box)
         self.settings_log_visible.addItems(["500", "2000", "5000"])
-        self.settings_log_store = QComboBox(logs_box)
+        self.settings_log_store = QComboBox(self.settings_logs_box)
         self.settings_log_store.addItems(["5000", "20000", "50000"])
         self.settings_log_visible.setToolTip(UI.settings_tooltip_visible_lines)
         self.settings_log_store.setToolTip(UI.settings_tooltip_stored_lines)
 
-        display_form.addRow(UI.settings_theme_label, self.settings_theme)
-        display_form.addRow(UI.settings_density_label, self.settings_density)
+        self.settings_theme_label = QLabel(UI.settings_theme_label, self.settings_display_box)
+        self.settings_density_label = QLabel(UI.settings_density_label, self.settings_display_box)
+        display_form.addRow(self.settings_theme_label, self.settings_theme)
+        display_form.addRow(self.settings_density_label, self.settings_density)
+
+        self.settings_language_label = QLabel(UI.settings_language_label, self.settings_display_box)
+        self.settings_language_row = QWidget(self.settings_display_box)
+        lang_l = QHBoxLayout(self.settings_language_row)
+        lang_l.setContentsMargins(0, 0, 0, 0)
+        lang_l.setSpacing(8 if self.cfg.density == "compact" else 10)
+        self.settings_language_group = QButtonGroup(self.settings_language_row)
+        self.settings_language_group.setExclusive(True)
+        self.settings_language_buttons: dict[str, QToolButton] = {}
+        for code, text, tip in (("en", "EN", "English"), ("it", "IT", "Italiano"), ("es", "ES", "Español")):
+            b = QToolButton(self.settings_language_row)
+            b.setObjectName("langDot")
+            b.setCheckable(True)
+            b.setText(text)
+            b.setToolTip(tip)
+            b.setProperty("lang", code)
+            b.clicked.connect(lambda _checked=False, c=code: self._set_ui_language(c))
+            self.settings_language_group.addButton(b)
+            self.settings_language_buttons[code] = b
+            lang_l.addWidget(b)
+        lang_l.addStretch(1)
+        display_form.addRow(self.settings_language_label, self.settings_language_row)
         behavior_form.addRow("", self.settings_auto_scan)
         behavior_form.addRow("", self.settings_auto_connect_single)
-        video_form.addRow(UI.settings_receiver_latency_label, self.settings_video_latency)
-        video_form.addRow(UI.settings_retry_profile_label, self.settings_retry_profile)
-        logs_form.addRow(UI.settings_visible_lines_label, self.settings_log_visible)
-        logs_form.addRow(UI.settings_stored_lines_label, self.settings_log_store)
+        self.settings_receiver_latency_label = QLabel(UI.settings_receiver_latency_label, self.settings_video_box)
+        self.settings_retry_profile_label = QLabel(UI.settings_retry_profile_label, self.settings_video_box)
+        self.settings_visible_lines_label = QLabel(UI.settings_visible_lines_label, self.settings_logs_box)
+        self.settings_stored_lines_label = QLabel(UI.settings_stored_lines_label, self.settings_logs_box)
+        video_form.addRow(self.settings_receiver_latency_label, self.settings_video_latency)
+        video_form.addRow(self.settings_retry_profile_label, self.settings_retry_profile)
+        logs_form.addRow(self.settings_visible_lines_label, self.settings_log_visible)
+        logs_form.addRow(self.settings_stored_lines_label, self.settings_log_store)
 
-        sc_l.addWidget(display_box)
-        sc_l.addWidget(behavior_box)
-        sc_l.addWidget(video_box)
-        sc_l.addWidget(logs_box)
+        sc_l.addWidget(self.settings_display_box)
+        sc_l.addWidget(self.settings_behavior_box)
+        sc_l.addWidget(self.settings_video_box)
+        sc_l.addWidget(self.settings_logs_box)
         sc_l.addStretch(1)
 
         btn_row = QWidget(self.settings_panel)
@@ -738,8 +781,17 @@ class MainWindow(QMainWindow):
             if self.settings is not None:
                 theme = str(self.settings.value("ui/theme", getattr(self.cfg, "theme", "slate")) or "slate")
                 density = str(self.settings.value("ui/density", getattr(self.cfg, "density", "normal")) or "normal")
-                self.settings_theme.setCurrentText(theme if theme in ("slate", "glass") else "slate")
-                self.settings_density.setCurrentText(density if density in ("normal", "compact") else "normal")
+                # Combos store internal values in itemData; select by data.
+                theme_val = theme if theme in ("slate", "glass") else "slate"
+                for i in range(self.settings_theme.count()):
+                    if str(self.settings_theme.itemData(i) or "") == theme_val:
+                        self.settings_theme.setCurrentIndex(i)
+                        break
+                density_val = density if density in ("normal", "compact") else "normal"
+                for i in range(self.settings_density.count()):
+                    if str(self.settings_density.itemData(i) or "") == density_val:
+                        self.settings_density.setCurrentIndex(i)
+                        break
                 self.settings_auto_scan.setChecked(bool(int(self.settings.value("ui/auto_scan", 1) or 0)))
                 self.settings_auto_connect_single.setChecked(
                     bool(int(self.settings.value("ui/auto_connect_single", 1) or 0))
@@ -750,10 +802,17 @@ class MainWindow(QMainWindow):
                     self.settings_video_latency.setValue(60)
                 try:
                     retry = str(self.settings.value("video/retry_profile", "stable") or "stable")
-                    self.settings_retry_profile.setCurrentText(retry if retry in ("stable", "aggressive") else "stable")
-                    self._video_retry_profile = self.settings_retry_profile.currentText()
+                    retry_val = retry if retry in ("stable", "aggressive") else "stable"
+                    for i in range(self.settings_retry_profile.count()):
+                        if str(self.settings_retry_profile.itemData(i) or "") == retry_val:
+                            self.settings_retry_profile.setCurrentIndex(i)
+                            break
+                    self._video_retry_profile = retry_val
                 except Exception:
-                    self.settings_retry_profile.setCurrentText("stable")
+                    for i in range(self.settings_retry_profile.count()):
+                        if str(self.settings_retry_profile.itemData(i) or "") == "stable":
+                            self.settings_retry_profile.setCurrentIndex(i)
+                            break
                     self._video_retry_profile = "stable"
                 try:
                     self.settings_log_visible.setCurrentText(str(self.settings.value("log/visible_lines", 500) or 500))
@@ -763,6 +822,23 @@ class MainWindow(QMainWindow):
                     self.settings_log_store.setCurrentText(str(self.settings.value("log/max_lines", 5000) or 5000))
                 except Exception:
                     self.settings_log_store.setCurrentText("5000")
+
+                # Language selector (persisted).
+                try:
+                    lang = self._read_ui_language()
+                    self._ui_language = lang
+                    self._ui = get_ui_strings(lang)
+                    b = self.settings_language_buttons.get(lang)
+                    if b is not None:
+                        b.setChecked(True)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Apply strings once at the end so the UI matches persisted language.
+        try:
+            self.apply_ui_strings(self._ui)
         except Exception:
             pass
 
@@ -790,9 +866,191 @@ class MainWindow(QMainWindow):
     def show_shortcuts_help(self) -> None:
         self._show_banner(
             "muted",
-            UI.shortcuts_help,
+            self._ui.shortcuts_help,
             auto_hide_ms=12_000,
         )
+
+    def _read_ui_language(self) -> str:
+        if self.settings is None:
+            return "en"
+        v = self.settings.value(self.SETTINGS_KEY_UI_LANGUAGE, None)
+        if v is None or str(v).strip() == "":
+            v = self.settings.value("ui_language", None)
+        return normalize_ui_language(str(v or "en"))
+
+    def _set_ui_language(self, lang: str) -> None:
+        v = normalize_ui_language(lang)
+        try:
+            if self.settings is not None:
+                self.settings.setValue(self.SETTINGS_KEY_UI_LANGUAGE, v)
+                # Best-effort: keep a flat key too (tools/tests/legacy).
+                self.settings.setValue("ui_language", v)
+        except Exception:
+            pass
+
+        self._ui_language = v
+        # Update the global `UI` proxy for all modules, then re-apply to existing widgets.
+        self.apply_ui_strings(set_ui_language(v))
+
+        # Refresh dynamic text surfaces that are state-derived (not only static labels).
+        try:
+            self._update_controls()
+            self._update_left_hint()
+            self._refresh_mid_state()
+            self._refresh_video_overlay()
+            self._update_bottom_hint()
+        except Exception:
+            pass
+
+    def apply_ui_strings(self, strings: UiStrings) -> None:
+        self._ui = strings
+
+        # Window / title
+        try:
+            self.setWindowTitle(strings.app_title)
+        except Exception:
+            pass
+        try:
+            if getattr(self, "title_label", None) is not None:
+                self.title_label.setText(strings.app_title)
+        except Exception:
+            pass
+
+        # Header nav buttons depend on the current layout mode; re-sync after updating strings.
+        try:
+            self._sync_header_nav_buttons(str(getattr(self, "_layout_id", "A") or "A"))
+        except Exception:
+            pass
+
+        # State badges (connection / scanning / connecting) must be re-rendered in the new language.
+        try:
+            self._apply_primary_state_badge(self.phase)
+        except Exception:
+            pass
+        try:
+            if getattr(self, "badge_video", None) is not None and getattr(self, "hud_video", None) is not None:
+                if bool(getattr(self, "video_active", False)):
+                    self.badge_video.setText(strings.badge_video_on)
+                    self.hud_video.setText(strings.badge_video_on)
+                else:
+                    self.badge_video.setText(strings.badge_video_off)
+                    self.hud_video.setText(strings.badge_video_off)
+        except Exception:
+            pass
+
+        # Left panel
+        try:
+            self.search.setPlaceholderText(strings.search_placeholder)
+            self.list_hint.setText(strings.list_hint)
+            self.btn_scan.setText(strings.scan_button)
+            self.btn_scan.setToolTip(strings.scan_tooltip)
+            self.btn_connect.setText(strings.connect_button)
+            self.btn_connect.setToolTip(strings.connect_tooltip)
+            self.btn_disconnect.setText(strings.disconnect_button)
+            self.btn_disconnect.setToolTip(strings.disconnect_tooltip)
+        except Exception:
+            pass
+
+        # Mid / Drive
+        try:
+            self.live_video_label.setText(strings.live_video_label)
+            self.telemetry_caption.setText(strings.telemetry_label)
+            self.drive_guard_title.setText(strings.drive_guard_title)
+            self.drive_guard_body.setText(strings.drive_guard_body)
+            self.drive_guard_action.setText(strings.dashboard_button)
+            self.video_view.setText(strings.video_not_available)
+            self.btn_video_help.setText(strings.video_requirements_button)
+            self.btn_video_help.setToolTip(strings.video_requirements_tooltip)
+            self.btn_overlay_disconnect.setText(strings.overlay_disconnect_button)
+            self.btn_overlay_disconnect.setToolTip(strings.overlay_disconnect_tooltip)
+        except Exception:
+            pass
+
+        # Settings panel
+        try:
+            self.settings_title.setText(strings.settings_title)
+            self.settings_display_box.setTitle(strings.settings_section_display)
+            self.settings_behavior_box.setTitle(strings.settings_section_behavior)
+            self.settings_video_box.setTitle(strings.settings_section_video)
+            self.settings_logs_box.setTitle(strings.settings_section_logs)
+            self.settings_theme_label.setText(strings.settings_theme_label)
+            self.settings_density_label.setText(strings.settings_density_label)
+            self.settings_language_label.setText(strings.settings_language_label)
+        except Exception:
+            pass
+
+        try:
+            self.settings_receiver_latency_label.setText(strings.settings_receiver_latency_label)
+            self.settings_retry_profile_label.setText(strings.settings_retry_profile_label)
+            self.settings_visible_lines_label.setText(strings.settings_visible_lines_label)
+            self.settings_stored_lines_label.setText(strings.settings_stored_lines_label)
+            self.settings_theme.setToolTip(strings.settings_tooltip_theme)
+            self.settings_density.setToolTip(strings.settings_tooltip_density)
+            self.settings_auto_scan.setText(strings.settings_auto_scan)
+            self.settings_auto_scan.setToolTip(strings.settings_tooltip_auto_scan)
+            self.settings_auto_connect_single.setText(strings.settings_auto_connect_single)
+            self.settings_auto_connect_single.setToolTip(strings.settings_tooltip_auto_connect_single)
+            self.settings_video_latency.setToolTip(strings.settings_tooltip_receiver_latency)
+            self.settings_retry_profile.setToolTip(strings.settings_tooltip_retry_profile)
+            self.settings_log_visible.setToolTip(strings.settings_tooltip_visible_lines)
+            self.settings_log_store.setToolTip(strings.settings_tooltip_stored_lines)
+            self.settings_copy_diag.setText(strings.settings_copy_diagnostics)
+            self.settings_apply.setText(strings.settings_apply)
+        except Exception:
+            pass
+
+        # Settings option display labels (keep stored values stable).
+        try:
+            if getattr(self, "settings_theme", None) is not None:
+                theme_map = {"slate": strings.settings_theme_slate, "glass": strings.settings_theme_glass}
+                cur = str(self.settings_theme.currentData() or "slate")
+                self.settings_theme.blockSignals(True)
+                try:
+                    self.settings_theme.clear()
+                    for v in ("slate", "glass"):
+                        self.settings_theme.addItem(theme_map.get(v, v), v)
+                    for i in range(self.settings_theme.count()):
+                        if str(self.settings_theme.itemData(i) or "") == cur:
+                            self.settings_theme.setCurrentIndex(i)
+                            break
+                finally:
+                    self.settings_theme.blockSignals(False)
+        except Exception:
+            pass
+        try:
+            if getattr(self, "settings_density", None) is not None:
+                dens_map = {"normal": strings.settings_density_normal, "compact": strings.settings_density_compact}
+                cur = str(self.settings_density.currentData() or "normal")
+                self.settings_density.blockSignals(True)
+                try:
+                    self.settings_density.clear()
+                    for v in ("normal", "compact"):
+                        self.settings_density.addItem(dens_map.get(v, v), v)
+                    for i in range(self.settings_density.count()):
+                        if str(self.settings_density.itemData(i) or "") == cur:
+                            self.settings_density.setCurrentIndex(i)
+                            break
+                finally:
+                    self.settings_density.blockSignals(False)
+        except Exception:
+            pass
+        try:
+            if getattr(self, "settings_retry_profile", None) is not None:
+                retry_map = {"stable": strings.settings_retry_stable, "aggressive": strings.settings_retry_aggressive}
+                cur = str(self.settings_retry_profile.currentData() or "stable")
+                self.settings_retry_profile.blockSignals(True)
+                try:
+                    self.settings_retry_profile.clear()
+                    for v in ("stable", "aggressive"):
+                        self.settings_retry_profile.addItem(retry_map.get(v, v), v)
+                    for i in range(self.settings_retry_profile.count()):
+                        if str(self.settings_retry_profile.itemData(i) or "") == cur:
+                            self.settings_retry_profile.setCurrentIndex(i)
+                            break
+                finally:
+                    self.settings_retry_profile.blockSignals(False)
+        except Exception:
+            pass
 
     def _update_bottom_hint(self) -> None:
         self._session_panel.update_bottom_hint(is_connected=bool(self.is_connected))
@@ -1221,12 +1479,12 @@ class MainWindow(QMainWindow):
     def _apply_settings_from_ui(self) -> None:
         if self.settings is None:
             return
-        theme = str(self.settings_theme.currentText() or "slate")
-        density = str(self.settings_density.currentText() or "normal")
+        theme = str(self.settings_theme.currentData() or "slate")
+        density = str(self.settings_density.currentData() or "normal")
         auto_scan = bool(self.settings_auto_scan.isChecked())
         auto_connect_single = bool(self.settings_auto_connect_single.isChecked())
         video_latency = int(self.settings_video_latency.value())
-        retry_profile = str(self.settings_retry_profile.currentText() or "stable")
+        retry_profile = str(self.settings_retry_profile.currentData() or "stable")
         log_visible = int(self.settings_log_visible.currentText() or "500")
         log_store = int(self.settings_log_store.currentText() or "5000")
 
@@ -1536,10 +1794,10 @@ class MainWindow(QMainWindow):
             cur = str(self.telemetry_label.text() or "").strip()
             if self.is_scanning:
                 if not cur or cur == UI.session_inactive:
-                    self.telemetry_label.setText("Scanning…")
+                    self.telemetry_label.setText(UI.mid_state_scanning_title)
             elif self.is_connecting:
                 if not cur or cur == UI.session_inactive:
-                    self.telemetry_label.setText("Connecting…")
+                    self.telemetry_label.setText(UI.mid_state_connecting_title)
             elif not self.is_connected:
                 if cur != UI.session_inactive:
                     self.telemetry_label.setText(UI.session_inactive)
@@ -1577,10 +1835,7 @@ class MainWindow(QMainWindow):
     def _show_video_requirements_hint(self) -> None:
         self._show_banner(
             "muted",
-            (
-                "Embedded video requires GI/GStreamer. On Ubuntu/WSL: "
-                "sudo apt install -y python3-gi gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
-            ),
+            (UI.video_deps_hint),
             auto_hide_ms=12_000,
         )
 
@@ -2079,7 +2334,7 @@ class MainWindow(QMainWindow):
                     overlay_layout = QVBoxLayout(self._shutdown_overlay)
                     overlay_layout.setContentsMargins(16, 16, 16, 16)
                     overlay_layout.addStretch(1)
-                    msg = QLabel("Stopping system…", self._shutdown_overlay)
+                    msg = QLabel(UI.stopping_system, self._shutdown_overlay)
                     msg.setProperty("badge", True)
                     msg.setProperty("badgeKind", "muted")
                     msg.setAlignment(Qt.AlignHCenter)
