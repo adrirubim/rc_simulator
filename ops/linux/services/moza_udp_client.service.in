@@ -17,6 +17,9 @@ Wants=network.target
 Type=simple
 User=@USER@
 WorkingDirectory=%h
+Environment=DISPLAY=@DISPLAY@
+Environment=XAUTHORITY=@XAUTHORITY@
+Environment=PYTHONUNBUFFERED=1
 ExecStart=@PYTHON@ -m rc_simulator.__main_headless__
 Restart=on-failure
 RestartSec=2

@@ -21,7 +21,8 @@ if not "%ERRORLEVEL%"=="0" (
 REM Best-effort: infer WSL distro from UNC path if present (\\wsl.localhost\<Distro>\...).
 echo %SCRIPT_DIR% | findstr /I /B "\\\\wsl.localhost\\" >nul
 if "%ERRORLEVEL%"=="0" (
-  for /f "tokens=4 delims=\\" %%D in ("%SCRIPT_DIR%") do set "DISTRO=%%D"
+  REM Example: \\wsl.localhost\Ubuntu\var\www\rc_simulator\ops\
+  for /f "tokens=3 delims=\\" %%D in ("%SCRIPT_DIR%") do set "DISTRO=%%D"
   REM Convert UNC path to a Linux path and strip trailing \ops\
   set "UNC_AFTER_DISTRO=%SCRIPT_DIR%"
   for /f "tokens=1,* delims=\\" %%A in ("%UNC_AFTER_DISTRO%") do set "UNC_AFTER_DISTRO=%%B"
