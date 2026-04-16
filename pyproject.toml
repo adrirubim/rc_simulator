@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rc-simulator"
-version = "0.1.0"
+version = "1.0.0"
 description = "RC Simulator (Qt / PySide6 frontend)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,6 +21,9 @@ rc-simulator-headless = "rc_simulator.__main_headless__:main"
 # Optional dependencies that depend on OS / environment.
 # Embedded video uses GI/GStreamer (typically provided by system packages on Linux).
 video = []
+winbuild = [
+  "pyinstaller>=6",
+]
 dev = [
   "ruff>=0.6",
   "pytest>=8",

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sys
 from importlib import resources as importlib_resources
+from pathlib import Path
 
 from PySide6.QtCore import QTimer  # type: ignore
 from PySide6.QtGui import QFont, QIcon  # type: ignore
@@ -13,6 +15,24 @@ from ..resources import icons as icons_pkg
 from .components.splash import SplashScreen
 from .styles.theme_qss import build_qss
 from .views.main_window import MainWindow
+
+
+def _frozen_meipass_path(*parts: str) -> Path | None:
+    """
+    When running from a PyInstaller bundle, access extracted data files via sys._MEIPASS.
+
+    We keep this tiny and defensive because it must not interfere with normal execution.
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+    meipass = getattr(sys, "_MEIPASS", None)
+    if not meipass:
+        return None
+    try:
+        p = Path(meipass, *parts)
+        return p if p.exists() else None
+    except Exception:
+        return None
 
 
 def _configure_high_dpi() -> None:
@@ -101,6 +121,12 @@ def _run_qt() -> None:
 
 def _load_app_icon() -> QIcon | None:
     try:
+        frozen = _frozen_meipass_path("rc_simulator", "resources", "icons", "rc-simulator.svg")
+        if frozen is not None:
+            icon = QIcon(str(frozen))
+            if not icon.isNull():
+                return icon
+
         icon_ref = importlib_resources.files(icons_pkg).joinpath("rc-simulator.svg")
         with importlib_resources.as_file(icon_ref) as p:
             if p.exists():
