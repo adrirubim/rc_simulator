@@ -122,7 +122,17 @@ RC Simulator is a Qt UI that coordinates:
 - Linux (original target). On Windows, WSLg for UI (access to `/dev/input` may not work).
 - Python 3.12+
 
-Video (Linux, optional):
+### System Setup (OS-level dependencies)
+
+`pip install` covers the **Python glue**. Some features require **system packages and permissions**:
+
+Input (MOZA / `evdev`) — Linux only:
+
+- Uses `/dev/input/*` via `evdev`.
+- You may need device/permission setup (e.g. add your user to the `input` group, or install a udev rule appropriate for your distro/hardware).
+- On non-Linux OSes (or environments without `/dev/input`), RC Simulator runs in **no-input mode** with a clear log message.
+
+Video (GStreamer GI / plugins) — Linux, optional:
 
 ```bash
 sudo apt update
