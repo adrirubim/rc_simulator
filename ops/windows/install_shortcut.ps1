@@ -123,8 +123,21 @@ if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
 fi
 .venv/bin/python -m pip install -e . >/dev/null
-exec .venv/bin/python -m rc_simulator
+test -x .venv/bin/rc-simulator
 "@.Trim()
+
+$wslArgs = @()
+if ($Distro.Trim().Length -gt 0) {
+  $wslArgs += @("-d", $Distro)
+}
+$wslArgs += @("-e", "bash", "-lc", $bashCommand)
+
+try {
+  Write-Output "Preparing WSL venv (editable install)..."
+  & $wsl @wslArgs | Out-Null
+} catch {
+  throw "Failed to prepare WSL environment. Try running the shortcut once, or run: wsl -e bash -lc `"$bashCommand`""
+}
 
 $distroArg = ""
 if ($Distro.Trim().Length -gt 0) {
@@ -173,7 +186,10 @@ $sc.WindowStyle = 1
 $sc.Description = "Launch RC Simulator via WSL (with log on failure)"
 
 # Windows shortcuts don't support SVG icons. If an .ico is present, use it.
-$iconPath = Join-Path $repoWin "assets\\icons\\rc-simulator.ico"
+$iconPath = Join-Path $repoWin "src\\rc_simulator\\resources\\icons\\rc-simulator.ico"
+if (-not (Test-Path -LiteralPath $iconPath)) {
+  $iconPath = Join-Path $repoWin "assets\\icons\\rc-simulator.ico"
+}
 if (Test-Path -LiteralPath $iconPath) {
   # Shortcuts can fail to resolve icons from UNC/WSL paths.
   # Copy the icon to a local Windows folder and point the shortcut there.

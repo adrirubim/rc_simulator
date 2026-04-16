@@ -31,7 +31,7 @@ set "DISTRO_ARG="
 if not "%DISTRO%"=="" set "DISTRO_ARG=-d \"%DISTRO%\" "
 
 REM Use bash -lc for a consistent shell.
-wsl %DISTRO_ARG%-e bash -lc "set -euo pipefail; cd \"%WSL_REPO_PATH%\"; if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi; .venv/bin/python -m pip install -e . >/dev/null; exec .venv/bin/python -m rc_simulator" >> "%LOG_FILE%" 2>&1
+wsl %DISTRO_ARG%-e bash -lc "set -euo pipefail; cd \"%WSL_REPO_PATH%\"; if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi; .venv/bin/python -m pip install -e . >/dev/null; exec .venv/bin/rc-simulator" >> "%LOG_FILE%" 2>&1
 set "EXITCODE=%ERRORLEVEL%"
 
 echo.>> "%LOG_FILE%"
