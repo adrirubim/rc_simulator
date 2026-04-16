@@ -19,7 +19,7 @@ python -m pip install -e ".[dev]"
 ### Run
 
 ```bash
-python -m rc_simulator
+rc-simulator
 ```
 
 ### Quality (local)

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icons/png/rc-simulator-128.png" alt="RC Simulator logo" width="96" />
+  <img src="src/rc_simulator/resources/icons/rc-simulator.svg" alt="RC Simulator logo" width="96" />
 </p>
 
 # RC Simulator
@@ -45,11 +45,12 @@ Use these commands from the **repository root** as your main entrypoints:
 | Command | Purpose | Notes |
 |--------|---------|-------|
 | `./scripts/dev-verify.sh` | **Full validation** (CI parity) | Creates venv if missing, installs deps, runs audit + ruff + pytest |
-| `python -m rc_simulator` | **Run (UI mode)** | Qt/PySide6 app. Requires a GUI-capable environment (Linux desktop or WSLg). |
-| `python -m rc_simulator.__main_headless__ --help` | **Run (headless mode)** | Ops/systemd entrypoint: MOZA/UDP without Qt/PySide6. |
-| `python scripts/moza_udp_client.py` | **Compatibility shim** | Thin wrapper that launches `python -m rc_simulator` without importing UI modules. |
+| `rc-simulator` | **Run (UI mode)** | Qt/PySide6 app. Requires a GUI-capable environment (Linux desktop or WSLg). |
+| `rc-simulator-headless --help` | **Run (headless mode)** | Ops/systemd entrypoint: MOZA/UDP without Qt/PySide6. |
+| `python scripts/moza_udp_client.py` | **Compatibility shim** | Thin wrapper that launches UI mode without importing UI modules. |
 | `ops/linux/install.sh --all` | **One-command install (Linux/WSL)** | Installs launcher; installs systemd service if systemd is running |
-| `ops/windows/install_shortcut.cmd` | **Install desktop shortcut (Windows)** | Recommended. Creates a Desktop shortcut that launches via WSL and writes logs on failure |
+| `install.bat` | **One-click install (Windows)** | Recommended. Creates a Desktop shortcut (“RC Simulator”) that launches via WSL and writes logs on failure |
+| `ops/windows/install_shortcut.cmd` | **Install desktop shortcut (Windows)** | Alternative. Same shortcut flow (useful if you don't want the root installer) |
 | `ops/linux/install_launcher.sh` | **Install desktop launcher** | Linux only (writes a `.desktop` entry) |
 
 ---
@@ -66,8 +67,8 @@ RC Simulator is a Qt UI that coordinates:
 ### Key Highlights
 
 - **Two official entrypoints:**
-  - UI mode: `python -m rc_simulator`
-  - Headless ops mode: `python -m rc_simulator.__main_headless__`
+  - UI mode: `rc-simulator`
+  - Headless ops mode: `rc-simulator-headless`
 - **CI-parity gate:** `./scripts/dev-verify.sh`
 - **OS integration:** systemd + desktop launcher (Linux) and shortcut installer (Windows via WSL)
 
@@ -140,6 +141,20 @@ git clone https://github.com/adrirubim/rc_simulator.git
 cd rc_simulator
 ```
 
+### 2. Windows one-click (WSL recommended)
+
+On Windows, the supported “double-click” experience is:
+
+- Double-click `install.bat`
+  - Creates a WSL-local `.venv` (if missing)
+  - Installs the package editable (`pip install -e .`)
+  - Creates a Desktop shortcut named **RC Simulator** (with logs on failure)
+
+Notes:
+
+- Requires WSL (and WSLg if you want to run the UI).
+- The shortcut launches `rc-simulator` inside the repo `.venv`.
+
 ### 2. System dependencies (Ubuntu/Debian)
 
 MOZA (Ubuntu/Debian):
@@ -168,14 +183,14 @@ python -m pip install -e ".[dev]"
 ### 4. Run
 
 ```bash
-python -m rc_simulator
+rc-simulator
 ```
 
 Headless:
 
 ```bash
 # Run in headless mode (CLI)
-python -m rc_simulator.__main_headless__ --help
+rc-simulator-headless --help
 ```
 
 ---
@@ -258,8 +273,8 @@ RC Simulator follows a **Ports & Adapters** style layout with explicit contracts
 
 ### Entrypoints
 
-- **UI mode**: `python -m rc_simulator` → `src/rc_simulator/__main__.py` → `src/rc_simulator/ui_qt/app.py`
-- **Headless mode (ops/systemd)**: `python -m rc_simulator.__main_headless__` → `src/rc_simulator/__main_headless__.py`
+- **UI mode**: `rc-simulator` → `src/rc_simulator/ui_qt/app.py:main`
+- **Headless mode (ops/systemd)**: `rc-simulator-headless` → `src/rc_simulator/__main_headless__.py:main`
 - **Shim**: `python scripts/moza_udp_client.py` (wrapper that launches UI mode)
 
 ### Layers (package map)
@@ -290,6 +305,11 @@ The UI talks to video through `src/rc_simulator/ports/video.py`:
 - **Obsidian base theme**: centralized QSS tokens with a dark “obsidian” palette (not pure black).
 - **Cinematic fade-to-obsidian**: layout transitions use an overlay (`#fadeOverlay`) with animated opacity.
 - **Precision HUD**: monospaced telemetry output + robust `◆/◇` MOZA status glyphs for zero-jump visual stability.
+
+### Packaging note (assets)
+
+- The Qt window icon is loaded via `importlib.resources` from `src/rc_simulator/resources/icons/rc-simulator.svg`.
+  This makes `pip install .` / `pip install -e .` portable regardless of repo folder layout.
 
 For a more detailed module map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -323,8 +343,8 @@ N/A. RC Simulator does not ship with user accounts. Any authentication/authoriza
 
 ```bash
 ./scripts/dev-verify.sh
-python -m rc_simulator
-python -m rc_simulator.__main_headless__ --help
+rc-simulator
+rc-simulator-headless --help
 python3 scripts/audit_layout.py
 ```
 

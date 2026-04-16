@@ -13,7 +13,9 @@ This repository prioritizes **clear first-run setup** and **repeatable operation
 
 ### Operational principles
 
-- **Single official entrypoint**: `python -m rc_simulator`
+- **Official entrypoints**:
+  - UI: `rc-simulator`
+  - Headless: `rc-simulator-headless`
 - **Recommended dev install**: editable install in a venv (`python -m pip install -e ".[dev]"`)
 - **Do not version artifacts**: `.venv/`, `__pycache__/`, `*.pyc`, `dist/`, `build/`, `*.egg-info/`
 

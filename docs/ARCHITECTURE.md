@@ -4,12 +4,15 @@ RC Simulator is organized as a **Ports & Adapters** (Clean Architecture friendly
 
 ### Entrypoints (unified)
 
-- **UI mode (Qt/PySide6)**: `python -m rc_simulator`
-  - Code: `src/rc_simulator/__main__.py` → `src/rc_simulator/ui_qt/app.py`
-- **Headless mode (ops/systemd)**: `python -m rc_simulator.__main_headless__`
-  - Code: `src/rc_simulator/__main_headless__.py`
+- **UI mode (Qt/PySide6)**: `rc-simulator`
+  - Code: `pyproject.toml` → `[project.scripts]` → `rc_simulator/ui_qt/app.py:main`
+- **Headless mode (ops/systemd)**: `rc-simulator-headless`
+  - Code: `pyproject.toml` → `[project.scripts]` → `rc_simulator/__main_headless__.py:main`
 - **Compatibility shim**: `python scripts/moza_udp_client.py`
   - Wrapper that launches UI mode without importing UI modules (no sys.path hacks).
+
+Developer note: `python -m rc_simulator.__main_headless__` remains a supported fallback for ops/systemd,
+but the documented “official” commands are the installed entrypoints.
 
 ### Layers (Ports & Adapters map)
 
@@ -72,5 +75,17 @@ UI responsiveness is protected in two layers:
 
 ### Ops (OS integration)
 
-See `ops/README.md` and `ops/linux/*` for systemd, launcher, and video helper scripts. The systemd unit template runs headless mode (`python3 -m rc_simulator.__main_headless__`).
+See `ops/README.md` and `ops/linux/*` for systemd, launcher, and video helper scripts.
+
+- **Windows one-click**: `install.bat` creates a Desktop shortcut that launches `rc-simulator` inside the repo `.venv` via WSL.
+- **systemd**: the unit template runs headless mode (typically `python3 -m rc_simulator.__main_headless__`), which is equivalent to `rc-simulator-headless`.
+
+### Packaging: resource resilience (icons)
+
+The Qt app icon is shipped as package data and loaded via `importlib.resources`:
+
+- Resource path: `rc_simulator/resources/icons/rc-simulator.svg`
+- Loader: `src/rc_simulator/ui_qt/app.py` uses `importlib.resources.files(...).joinpath(...)` + `as_file(...)`
+
+This ensures `pip install .` works regardless of repo folder layout (no `../assets/...` path logic).
 

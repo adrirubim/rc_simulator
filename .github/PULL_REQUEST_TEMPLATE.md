@@ -11,7 +11,7 @@
 Select what you ran:
 
 - [ ] `./scripts/dev-verify.sh`
-- [ ] `python -m rc_simulator`
+- [ ] `rc-simulator`
 
 ## Screenshots (if applicable)
 
