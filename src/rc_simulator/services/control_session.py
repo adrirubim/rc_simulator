@@ -171,7 +171,9 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: Cont
             _put(
                 LogEvent(
                     level="WARN",
-                    message="MOZA input disabled on this OS (requires Linux /dev/input + evdev). Running in no-input mode.",
+                    message=(
+                        "MOZA input disabled on this OS (requires Linux /dev/input + evdev). Running in no-input mode."
+                    ),
                 ),
                 allow_drop=False,
             )
