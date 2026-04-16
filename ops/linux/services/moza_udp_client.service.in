@@ -20,7 +20,8 @@ WorkingDirectory=%h
 Environment=DISPLAY=@DISPLAY@
 Environment=XAUTHORITY=@XAUTHORITY@
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@PYTHON@ -m rc_simulator.__main_headless__
+# Prefer the console script when @PYTHON@ points to a venv, but keep module fallback.
+ExecStart=/bin/bash -lc 'PYDIR="$(dirname "@PYTHON@")"; if [ -x "${PYDIR}/rc-simulator-headless" ]; then exec "${PYDIR}/rc-simulator-headless"; else exec "@PYTHON@" -m rc_simulator.__main_headless__; fi'
 Restart=on-failure
 RestartSec=2
 

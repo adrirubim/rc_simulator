@@ -119,10 +119,7 @@ $wslRepoPath = Get-WslRepoPath -RepoWin $repoWin -Distro $Distro -ExplicitWslPat
 $bashCommand = @"
 set -euo pipefail
 cd "$wslRepoPath"
-if [ ! -x .venv/bin/python ]; then
-  python3 -m venv .venv
-fi
-.venv/bin/python -m pip install -e . >/dev/null
+bash scripts/bootstrap_venv.sh --quiet
 test -x .venv/bin/rc-simulator
 "@.Trim()
 
