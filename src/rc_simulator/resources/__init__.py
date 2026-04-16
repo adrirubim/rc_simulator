@@ -1,2 +1,1 @@
 """Package resources (icons, etc.)."""
-
