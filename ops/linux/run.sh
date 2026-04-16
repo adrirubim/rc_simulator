@@ -14,9 +14,9 @@ if [[ ! -x "${PY}" ]]; then
   PY="${REPO_ROOT}/.venv/bin/python"
 fi
 
-# Ensure editable install so `python -m rc_simulator` works with `src/` layout.
+# Ensure editable install so `rc-simulator` entrypoint is available.
 "${PY}" -m pip install -U pip >/dev/null 2>&1 || true
 "${PY}" -m pip install -e . >/dev/null
 
-exec "${PY}" -m rc_simulator
+exec "${REPO_ROOT}/.venv/bin/rc-simulator"
 

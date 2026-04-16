@@ -4,7 +4,7 @@ Linux/WSL operational scripts.
 
 ### What is here
 
-- `run.sh`: runs `python -m rc_simulator` from this repo (creates `.venv/` if missing).
+- `run.sh`: runs `rc-simulator` from this repo (creates `.venv/` if missing).
 - `install_launcher.sh`: installs a `.desktop` launcher and the SVG icon for the current user.
 - `install_service.sh`: installs the systemd unit (headless) using the template in `services/`.
 - `camera_receive.sh`: GStreamer helper to preview the UDP H264 video stream.

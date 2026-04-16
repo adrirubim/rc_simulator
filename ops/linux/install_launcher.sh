@@ -47,7 +47,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LAUNCHER_NAME="rc-simulator.desktop"
 SOURCE_LAUNCHER="${SCRIPT_DIR}/desktop/${LAUNCHER_NAME}"
 ICON_NAME="rc-simulator"
-SOURCE_ICON="${SCRIPT_DIR}/../../assets/icons/${ICON_NAME}.svg"
+SOURCE_ICON="${SCRIPT_DIR}/../../src/rc_simulator/resources/icons/${ICON_NAME}.svg"
 APPS_DIR="${HOME}/.local/share/applications"
 DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
 if [[ -z "${DESKTOP_DIR}" ]]; then

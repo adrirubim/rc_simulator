@@ -25,7 +25,7 @@ Scripts and assets for deployment / OS integration.
 - `install_service.sh`: installs the systemd unit into `/etc/systemd/system/`.
 - `services/moza_udp_client.service.in`: systemd unit **template** (source of truth).
   - Install via `ops/linux/install_service.sh --user <username>`.
-  - The unit runs headless (`python3 -m rc_simulator.__main_headless__`) and assumes `rc-simulator` is installed for that user/machine.
+  - The unit runs headless (`rc-simulator-headless`, i.e. `python3 -m rc_simulator.__main_headless__`) and assumes `rc-simulator` is installed for that user/machine.
 - `camera_receive.sh`: GStreamer-based video receiver helper.
 - `install_launcher.sh`: installs a `.desktop` launcher (expects `ops/linux/desktop/rc-simulator.desktop`).
 
