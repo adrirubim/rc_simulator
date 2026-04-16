@@ -13,6 +13,10 @@ dependencies = [
   "evdev; platform_system == 'Linux'",
 ]
 
+[project.scripts]
+rc-simulator = "rc_simulator.ui_qt.app:main"
+rc-simulator-headless = "rc_simulator.__main_headless__:main"
+
 [project.optional-dependencies]
 # Optional dependencies that depend on OS / environment.
 # Embedded video uses GI/GStreamer (typically provided by system packages on Linux).
@@ -31,6 +35,12 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"rc_simulator" = [
+  "resources/**/*.svg",
+  "resources/**/*.ico",
+]
 
 [tool.ruff]
 line-length = 120

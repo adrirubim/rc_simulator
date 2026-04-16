@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import os
+from importlib import resources as importlib_resources
 
 from PySide6.QtCore import QTimer  # type: ignore
-from PySide6.QtGui import QFont  # type: ignore
+from PySide6.QtGui import QFont, QIcon  # type: ignore
 from PySide6.QtWidgets import QApplication  # type: ignore
 
 from ..app.bootstrap import default_controller, default_settings, default_video_receiver_factory
 from ..core.config import load_config
+from ..resources import icons as icons_pkg
 from .components.splash import SplashScreen
 from .styles.theme_qss import build_qss
 from .views.main_window import MainWindow
@@ -42,9 +44,23 @@ def main() -> None:
 def _run_qt() -> None:
     cfg = load_config()
     app = QApplication([])
+    # On Linux/Wayland the taskbar icon can be resolved via the .desktop entry.
+    # Tie this process/window to our desktop file name when available.
+    try:
+        app.setDesktopFileName("rc-simulator")
+    except Exception:
+        pass
     app.setStyleSheet(build_qss(theme=cfg.theme, density=cfg.density))
     # Let QSS own font sizing; set only a best-effort family fallback.
     app.setFont(QFont("Segoe UI"))
+
+    # Window/taskbar icon: load from packaged resources for portability.
+    icon = _load_app_icon()
+    if icon is not None:
+        try:
+            app.setWindowIcon(icon)
+        except Exception:
+            pass
 
     splash = SplashScreen()
     splash.show()
@@ -64,6 +80,11 @@ def _run_qt() -> None:
         app._splash = splash  # type: ignore[attr-defined]
 
         w = app._main_window  # type: ignore[attr-defined]
+        try:
+            if "icon" in locals() and icon is not None:
+                w.setWindowIcon(icon)
+        except Exception:
+            pass
         w.show()
         # Reveal: animate internal content only (platform-safe).
         try:
@@ -76,6 +97,19 @@ def _run_qt() -> None:
 
     QTimer.singleShot(0, _start)
     app.exec()
+
+
+def _load_app_icon() -> QIcon | None:
+    try:
+        icon_ref = importlib_resources.files(icons_pkg).joinpath("rc-simulator.svg")
+        with importlib_resources.as_file(icon_ref) as p:
+            if p.exists():
+                icon = QIcon(str(p))
+                if not icon.isNull():
+                    return icon
+    except Exception:
+        return None
+    return None
 
 
 if __name__ == "__main__":
