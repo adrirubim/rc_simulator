@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import select
 import socket
 import time
@@ -21,6 +22,9 @@ from ..core.queue_utils import put_with_backpressure
 from ..core.state import AppPhase, TelemetryPayload
 from .control_math import apply_deadzone, clamp, norm_axis, norm_trigger
 from .steer_unwrap import SteerUnwrapper
+
+# OS guard: never touch /dev/input outside Linux.
+_IS_LINUX = platform.system() == "Linux"
 
 # =====================
 # AXES (confirmed)
@@ -68,6 +72,8 @@ PEDAL_DEADZONE_DEFAULT = 0.02
 
 
 def _list_input_candidates() -> list[str]:
+    if not _IS_LINUX:
+        return []
     out: list[str] = []
     for p in sorted(Path("/dev/input/by-id").glob("*event*")):
         out.append(str(p))
@@ -160,48 +166,58 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: Cont
         pedal_deadzone = float(control_cfg.pedal_deadzone or PEDAL_DEADZONE_DEFAULT)
 
         abs_map: dict[int, Any] | None = None
-        try:
-            dev, abs_map = open_moza_device(dev_path)
-            _put(MozaStateEvent(connected=True), allow_drop=False)
-            _put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"), allow_drop=True)
-        except FileNotFoundError as e:
+        if not _IS_LINUX:
             _put(MozaStateEvent(connected=False), allow_drop=False)
-            candidates = _list_input_candidates()
-            if candidates:
+            _put(
+                LogEvent(
+                    level="WARN",
+                    message="MOZA input disabled on this OS (requires Linux /dev/input + evdev). Running in no-input mode.",
+                ),
+                allow_drop=False,
+            )
+        else:
+            try:
+                dev, abs_map = open_moza_device(dev_path)
+                _put(MozaStateEvent(connected=True), allow_drop=False)
+                _put(LogEvent(level="INFO", message=f"MOZA: {dev.path} - {dev.name}"), allow_drop=True)
+            except FileNotFoundError as e:
+                _put(MozaStateEvent(connected=False), allow_drop=False)
+                candidates = _list_input_candidates()
+                if candidates:
+                    _put(
+                        LogEvent(level="INFO", message="Input candidates:\n- " + "\n- ".join(candidates)),
+                        allow_drop=True,
+                    )
+                if not allow_no_moza:
+                    raise FileNotFoundError(
+                        f"MOZA device not found at {dev_path!r}. Set RC_UI_MOZA_DEV_PATH to one of:\n- "
+                        + "\n- ".join(candidates or ["(no /dev/input candidates found)"])
+                    ) from e
                 _put(
-                    LogEvent(level="INFO", message="Input candidates:\n- " + "\n- ".join(candidates)),
-                    allow_drop=True,
+                    LogEvent(
+                        level="WARN",
+                        message=(
+                            f"MOZA device not found at {dev_path!r}. Running in no-input mode. "
+                            "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
+                        ),
+                    ),
+                    allow_drop=False,
                 )
-            if not allow_no_moza:
-                raise FileNotFoundError(
-                    f"MOZA device not found at {dev_path!r}. Set RC_UI_MOZA_DEV_PATH to one of:\n- "
-                    + "\n- ".join(candidates or ["(no /dev/input candidates found)"])
-                ) from e
-            _put(
-                LogEvent(
-                    level="WARN",
-                    message=(
-                        f"MOZA device not found at {dev_path!r}. Running in no-input mode. "
-                        "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
+                _put(LogEvent(level="DEBUG", message=f"MOZA open error: {e}"), allow_drop=True)
+            except Exception as e:
+                _put(MozaStateEvent(connected=False), allow_drop=False)
+                if not allow_no_moza:
+                    raise
+                _put(
+                    LogEvent(
+                        level="WARN",
+                        message=(
+                            f"MOZA init failed ({e}). Running in no-input mode. "
+                            "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
+                        ),
                     ),
-                ),
-                allow_drop=False,
-            )
-            _put(LogEvent(level="DEBUG", message=f"MOZA open error: {e}"), allow_drop=True)
-        except Exception as e:
-            _put(MozaStateEvent(connected=False), allow_drop=False)
-            if not allow_no_moza:
-                raise
-            _put(
-                LogEvent(
-                    level="WARN",
-                    message=(
-                        f"MOZA init failed ({e}). Running in no-input mode. "
-                        "Set RC_UI_MOZA_DEV_PATH to the correct /dev/input/... path to enable MOZA input."
-                    ),
-                ),
-                allow_drop=False,
-            )
+                    allow_drop=False,
+                )
 
         steer = 0.0
         gas01 = 0.0
