@@ -250,5 +250,9 @@ def main_cli() -> None:
     raise SystemExit(run_headless())
 
 
+def main() -> None:
+    main_cli()
+
+
 if __name__ == "__main__":
     main_cli()

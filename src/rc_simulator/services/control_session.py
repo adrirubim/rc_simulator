@@ -6,7 +6,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from evdev import InputDevice, ecodes
+try:
+    from evdev import InputDevice, ecodes  # type: ignore
+
+    _HAS_EVDEV = True
+except ImportError:  # pragma: no cover - platform dependent (Windows/macOS)
+    InputDevice = Any  # type: ignore[assignment]
+    ecodes = None  # type: ignore[assignment]
+    _HAS_EVDEV = False
 
 from ..core.control_config import ControlConfig
 from ..core.events import ErrorEvent, LogEvent, MozaStateEvent, SessionStoppedEvent, StatusEvent, TelemetryEvent
@@ -19,9 +26,22 @@ from .steer_unwrap import SteerUnwrapper
 # AXES (confirmed)
 # 0 steering / 2 throttle / 5 brake
 # =====================
-STEER_CODE = ecodes.ABS_X
-THROTTLE_CODE = ecodes.ABS_Z
-BRAKE_CODE = ecodes.ABS_RZ
+# These codes are stable Linux input-event constants; keep numeric fallbacks so Windows can import safely.
+ABS_X = 0x00
+ABS_Z = 0x02
+ABS_RZ = 0x05
+EV_ABS = 0x03
+
+if _HAS_EVDEV:
+    STEER_CODE = int(ecodes.ABS_X)
+    THROTTLE_CODE = int(ecodes.ABS_Z)
+    BRAKE_CODE = int(ecodes.ABS_RZ)
+    EV_ABS_CODE = int(ecodes.EV_ABS)
+else:
+    STEER_CODE = ABS_X
+    THROTTLE_CODE = ABS_Z
+    BRAKE_CODE = ABS_RZ
+    EV_ABS_CODE = EV_ABS
 
 # =====================
 # INVERSIONI (defaults; overridden by config at runtime)
@@ -65,10 +85,12 @@ def _list_input_candidates() -> list[str]:
 
 
 def open_moza_device(dev_path: str) -> tuple[InputDevice, dict[int, Any]]:
+    if not _HAS_EVDEV:
+        raise RuntimeError("evdev not available on this platform (MOZA input disabled)")
     dev = InputDevice(dev_path)
 
     caps = dev.capabilities(absinfo=True)
-    absinfo = caps.get(ecodes.EV_ABS, [])
+    absinfo = caps.get(EV_ABS_CODE, [])
     abs_map = {code: info for code, info in absinfo}
 
     for code, label in [
@@ -207,7 +229,7 @@ def drive_worker(car: dict[str, Any], stop_event, ui_queue, *, control_cfg: Cont
 
             if readable:
                 for event in dev.read():
-                    if event.type != ecodes.EV_ABS:
+                    if event.type != EV_ABS_CODE:
                         continue
 
                     code = event.code
