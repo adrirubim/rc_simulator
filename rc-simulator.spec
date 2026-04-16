@@ -9,15 +9,27 @@ from PyInstaller.building.datastruct import Tree
 block_cipher = None
 
 
-ROOT = Path(__file__).resolve().parent
+# PyInstaller typically defines SPECPATH (directory containing this .spec).
+# Some environments may execute the spec without defining __file__.
+ROOT = Path(globals().get("SPECPATH", Path.cwd())).resolve()
 ENTRYPOINT = ROOT / "src" / "rc_simulator" / "ui_qt" / "app.py"
 
 # Bundle all runtime assets so importlib.resources can resolve them inside the executable.
 # This lands under: <bundle>/rc_simulator/resources/...
 RESOURCES_DIR = ROOT / "src" / "rc_simulator" / "resources"
-DATAS = []
 if RESOURCES_DIR.exists():
-    DATAS.append(Tree(str(RESOURCES_DIR), prefix="rc_simulator/resources"))
+    _tree = Tree(str(RESOURCES_DIR), prefix="rc_simulator/resources")
+    # PyInstaller's Tree may yield 2-tuples or 3-tuples like (dest, src, typecode).
+    # Analysis(datas=...) expects (src, dest) pairs.
+    DATAS = []
+    for item in _tree:
+        try:
+            dest, src, _typecode = item
+        except ValueError:
+            dest, src = item
+        DATAS.append((src, dest))
+else:
+    DATAS = []
 
 # Optional Windows .ico for the produced EXE. (If missing, we skip setting an icon.)
 ICON_ICO = ROOT / "src" / "rc_simulator" / "resources" / "icons" / "rc-simulator.ico"

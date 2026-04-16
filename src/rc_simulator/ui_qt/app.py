@@ -9,12 +9,25 @@ from PySide6.QtCore import QTimer  # type: ignore
 from PySide6.QtGui import QFont, QIcon  # type: ignore
 from PySide6.QtWidgets import QApplication  # type: ignore
 
-from ..app.bootstrap import default_controller, default_settings, default_video_receiver_factory
-from ..core.config import load_config
-from ..resources import icons as icons_pkg
-from .components.splash import SplashScreen
-from .styles.theme_qss import build_qss
-from .views.main_window import MainWindow
+from rc_simulator.app.bootstrap import default_controller, default_settings, default_video_receiver_factory
+from rc_simulator.core.config import load_config
+from rc_simulator.resources import icons as icons_pkg
+from rc_simulator.ui_qt.components.splash import SplashScreen
+from rc_simulator.ui_qt.styles.theme_qss import build_qss
+from rc_simulator.ui_qt.views.main_window import MainWindow
+
+
+def _configure_windows_appusermodel_id() -> None:
+    # Ensures the taskbar icon/grouping uses our AppUserModelID on Windows.
+    # Without this, Windows may show a generic/system icon in some launch scenarios.
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("rc-simulator")  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 
 def _frozen_meipass_path(*parts: str) -> Path | None:
@@ -63,6 +76,7 @@ def main() -> None:
 
 def _run_qt() -> None:
     cfg = load_config()
+    _configure_windows_appusermodel_id()
     app = QApplication([])
     # On Linux/Wayland the taskbar icon can be resolved via the .desktop entry.
     # Tie this process/window to our desktop file name when available.

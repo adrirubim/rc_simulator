@@ -22,6 +22,13 @@ if (-not (Test-Path -LiteralPath $repoWin)) {
 
 $wsl = (Get-Command wsl.exe -ErrorAction Stop).Source
 
+function Get-NativeExePath([string]$RepoWin) {
+  # Prefer a native Windows build if present.
+  $p = Join-Path $RepoWin "dist\\rc-simulator.exe"
+  if (Test-Path -LiteralPath $p) { return $p }
+  return ""
+}
+
 function Get-DesktopCandidates() {
   $candidates = New-Object System.Collections.Generic.List[string]
 
@@ -112,6 +119,43 @@ function Get-WslRepoPath([string]$RepoWin, [string]$Distro, [string]$ExplicitWsl
     throw "Unable to determine WSL path for repo. RepoWin=$RepoWin Distro=$Distro"
   }
   return ($out | Select-Object -First 1).Trim()
+}
+
+$nativeExe = Get-NativeExePath -RepoWin $repoWin
+
+# If a native EXE exists, we install a direct shortcut to it (no WSL wrapper).
+if ($nativeExe.Trim().Length -gt 0) {
+  $shortcutPath = Pick-DesktopPath -Name $ShortcutName
+
+  $shell = New-Object -ComObject WScript.Shell
+  $sc = $shell.CreateShortcut($shortcutPath)
+  $sc.TargetPath = $nativeExe
+  $sc.WorkingDirectory = (Split-Path -Parent $nativeExe)
+  $sc.WindowStyle = 1
+  $sc.Description = "Launch RC Simulator (native Windows EXE)"
+
+  # Use .ico if present; otherwise fall back to the EXE icon.
+  $iconPath = Join-Path $repoWin "src\\rc_simulator\\resources\\icons\\rc-simulator.ico"
+  if (-not (Test-Path -LiteralPath $iconPath)) {
+    $iconPath = Join-Path $repoWin "assets\\icons\\rc-simulator.ico"
+  }
+  if (Test-Path -LiteralPath $iconPath) {
+    try {
+      $cacheDir = Join-Path $env:LOCALAPPDATA "rc_simulator"
+      New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+      $cachedIcon = Join-Path $cacheDir "rc-simulator.ico"
+      Copy-Item -LiteralPath $iconPath -Destination $cachedIcon -Force
+      $sc.IconLocation = "$cachedIcon,0"
+    } catch {
+      $sc.IconLocation = "$iconPath,0"
+    }
+  } else {
+    $sc.IconLocation = "$nativeExe,0"
+  }
+
+  $sc.Save()
+  Write-Output "Created native shortcut: $shortcutPath"
+  exit 0
 }
 
 $wslRepoPath = Get-WslRepoPath -RepoWin $repoWin -Distro $Distro -ExplicitWslPath $WslRepoPath

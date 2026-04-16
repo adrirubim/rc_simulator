@@ -7,6 +7,7 @@ rem - Builds from rc-simulator.spec
 rem - Outputs into dist\
 
 for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+if "%REPO_ROOT:~-1%"=="\\" set "REPO_ROOT=%REPO_ROOT:~0,-1%"
 pushd "%REPO_ROOT%" >nul
 
 set "PY_EXE="
