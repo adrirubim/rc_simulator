@@ -53,6 +53,49 @@ class LogPanel:
         else:
             self.refresh_log_view()
 
+    def append_logs(self, items: list[tuple[str, str]]) -> None:
+        """
+        Batched log append to keep UI fluid under bursts.
+
+        items: [(level, message), ...]
+        """
+        if not items:
+            return
+
+        ts = time.strftime("%H:%M:%S")
+        # Update store first (bounded once per batch).
+        for level, text in items:
+            lvl = (level or "INFO").upper()
+            self.log_store.append((ts, lvl, str(text)))
+        max_lines = int(getattr(self.cfg, "log_max_lines", 5000))
+        if len(self.log_store) > max_lines:
+            self.log_store[:] = self.log_store[-max_lines:]
+
+        # Fast-path: if not filtered and not paused, append once (single widget update).
+        if (not (self.log_filter.text() or "").strip()) and (not self.btn_pause_log.isChecked()):
+            self._log_last_render_was_filtered = False
+            try:
+                sb = self.log_view.verticalScrollBar()
+                at_bottom_before = sb.value() >= (sb.maximum() - 2)
+            except Exception:
+                at_bottom_before = True
+
+            lines: list[str] = []
+            for level, text in items:
+                lvl = (level or "INFO").upper()
+                lines.append(self._fmt_line(ts, lvl, str(text)))
+            try:
+                # One append to reduce per-line overhead.
+                self.log_view.appendPlainText("\n".join(lines))
+            except Exception:
+                pass
+            if at_bottom_before:
+                self._scroll_to_bottom()
+            return
+
+        # If filtered or paused, rebuild for correctness.
+        self.refresh_log_view()
+
     def clear_log(self) -> None:
         self.log_store.clear()
         self.refresh_log_view()
@@ -77,7 +120,11 @@ class LogPanel:
         if out_lines:
             self.log_view.setPlainText("\n".join(out_lines))
         else:
-            self.log_view.setPlainText("")
+            # Premium empty-state: keep the dashboard feeling intentional.
+            if not f:
+                self.log_view.setPlainText(UI.log_empty_placeholder)
+            else:
+                self.log_view.setPlainText("")
 
         if was_paused:
             # preserve reading position

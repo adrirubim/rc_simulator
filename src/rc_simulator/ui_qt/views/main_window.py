@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import metadata
 
-from PySide6.QtCore import QEasingCurve, Qt, QTimer, QVariantAnimation
+from PySide6.QtCore import QEasingCurve, QEvent, QEventLoop, QPoint, Qt, QTimer, QVariantAnimation
 from PySide6.QtGui import QGuiApplication, QImage, QKeyEvent, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -20,7 +21,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -55,6 +55,27 @@ from ..components.hud import build_hud, format_moza_badge
 from ..strings import UI, UiStrings, get_ui_strings, normalize_ui_language, set_ui_language
 from ..styles.theme_qss import build_qss
 from ._cars_panel import CarsPanel
+from ._drive_surface import (
+    ensure_layout_roots_visible as _ensure_layout_roots_visible,
+)
+from ._drive_surface import (
+    mount_video_into_dashboard as _mount_video_into_dashboard,
+)
+from ._drive_surface import (
+    mount_video_into_drive_root as _mount_video_into_drive_root,
+)
+from ._layout_manager import (
+    apply_layout as _apply_layout_mgr,
+)
+from ._layout_manager import (
+    apply_layout_now_impl as _apply_layout_now_impl_mgr,
+)
+from ._layout_manager import (
+    force_end_layout_transition_if_stuck as _force_end_layout_transition_if_stuck_mgr,
+)
+from ._layout_manager import (
+    on_layout_fade_in_done as _on_layout_fade_in_done_mgr,
+)
 from ._log_panel import LogPanel
 from ._queue_drain import drain_queue
 from ._session_panel import SessionPanel
@@ -69,6 +90,17 @@ class CarRow:
 
 
 class MainWindow(QMainWindow):
+    """
+    Main Qt window (presentation layer).
+
+    Gold Master behavior highlights:
+    - UI drains a bounded UiEvent queue and coalesces high-frequency telemetry/log bursts per tick
+      to keep the GUI responsive under load.
+    - Video frames are rendered as BGRA8888 (`QImage.Format_BGRA8888`) via the `VideoReceiver` port.
+    - Layout transitions use a subtle "fade-to-obsidian" overlay (`#fadeOverlay`).
+    - MOZA connection state is surfaced with stable `◆/◇` glyphs (zero-jump indicator).
+    """
+
     SETTINGS_KEY_UI_LANGUAGE = "ui/language"
 
     def __init__(
@@ -116,6 +148,9 @@ class MainWindow(QMainWindow):
         self._autoconnect_seq: int = 0
         self._autoconnect_pending: bool = False
 
+        # Session elapsed time badge (center header instruments).
+        self._session_started_mono: float | None = None
+
         self._layout_transition_in_progress: bool = False
         self._layout_transition_current: str | None = None
         self._layout_transition_queued: str | None = None
@@ -129,6 +164,23 @@ class MainWindow(QMainWindow):
         self._startup_layout_id: str = "A"
         self._did_initial_window_restore: bool = False
         self._shutdown_overlay: QWidget | None = None
+        self._exit_confirm_overlay: QWidget | None = None
+        self._exit_confirm_card: QWidget | None = None
+        self._exit_confirm_effect: QGraphicsOpacityEffect | None = None
+        self._exit_confirm_anim: QVariantAnimation | None = None
+        self._exit_confirm_title: QLabel | None = None
+        self._exit_confirm_body: QLabel | None = None
+        self._exit_confirm_btn_cancel: QPushButton | None = None
+        self._exit_confirm_btn_exit: QPushButton | None = None
+        self._exit_confirm_finish: Callable[[bool], None] | None = None
+        # Toast overlay (non-reflow notifications under header).
+        self._toast_overlay: QWidget | None = None
+        self._toast_effect: QGraphicsOpacityEffect | None = None
+        self._toast_anim: QVariantAnimation | None = None
+        self._toast_anchor: QPoint | None = None
+        self._toast_last_msg: str = ""
+        self._toast_last_kind: str = ""
+        self._toast_last_ts_ms: int = 0
 
         self.setWindowTitle(UI.app_title)
         self.resize(1280, 800)
@@ -153,6 +205,29 @@ class MainWindow(QMainWindow):
 
         if bool(getattr(self.cfg, "auto_scan", True)):
             self.start_scan()
+
+        # Startup fullscreen:
+        # - If we start in Drive (layout B), we always request fullscreen to hide OS chrome.
+        # - Otherwise, respect the stored user preference.
+        # Avoid Wayland/WSLg transitions here (Drive will handle best-effort fullscreen/maximize).
+        try:
+            start_in_drive = str(getattr(self, "_startup_layout_id", "A") or "A") == "B"
+            if self.settings is not None:
+                want_fs = bool(
+                    int(
+                        self.settings.value(
+                            "ui/start_fullscreen",
+                            1 if bool(getattr(self.cfg, "start_fullscreen", False)) else 0,
+                        )
+                        or 0
+                    )
+                )
+            else:
+                want_fs = bool(getattr(self.cfg, "start_fullscreen", False))
+            if (start_in_drive or want_fs) and (not self._is_wayland()):
+                self._run_when_window_has_size(self.showFullScreen)
+        except Exception:
+            pass
 
     def showEvent(self, event) -> None:
         # One-time: restore window state + enforce startup layout after the window exists.
@@ -218,6 +293,15 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(0, lambda: _tick(int(tries)))
 
+    def _mount_video_into_drive_root(self) -> None:
+        _mount_video_into_drive_root(self)
+
+    def _mount_video_into_dashboard(self) -> None:
+        _mount_video_into_dashboard(self)
+
+    def _ensure_layout_roots_visible(self) -> None:
+        _ensure_layout_roots_visible(self)
+
     def _init_premium_polish(self) -> None:
         # Pulse timer: only active while scanning/connecting.
         self._pulse_timer = QTimer(self)
@@ -245,6 +329,7 @@ class MainWindow(QMainWindow):
         self._central_stack = root
         self._root = root
         root_layout = QVBoxLayout(root)
+        self._root_layout = root_layout
         if self.cfg.density == "compact":
             root_layout.setContentsMargins(10, 10, 10, 10)
             root_layout.setSpacing(8)
@@ -270,6 +355,7 @@ class MainWindow(QMainWindow):
         self.badge_moza = header.badge_moza
         self.badge_video = header.badge_video
         self.badge_output = header.badge_output
+        self.badge_time = header.badge_time
         self.btn_drive = header.btn_drive
         self.btn_debug = header.btn_debug
         self.btn_settings = header.btn_settings
@@ -281,18 +367,28 @@ class MainWindow(QMainWindow):
         self.btn_drive.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.btn_debug.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
         self.btn_settings.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        try:
+            self._sync_window_controls()
+        except Exception:
+            pass
 
         root_layout.addWidget(self.header_widget)
 
-        # Non-modal banner (warnings/errors) under header
-        header_banner = build_banner(parent=root, on_close=self._hide_banner)
+        # Toast overlay (premium, non-reflow). Parent it to the central widget so
+        # coordinates match the content area on all platforms.
+        self._toast_overlay = QWidget(root)
+        self._toast_overlay.setObjectName("toastOverlay")
+        self._toast_overlay.hide()
+
+        header_banner = build_banner(parent=self._toast_overlay, on_close=self._hide_banner)
         self.banner = header_banner.widget
         self.banner_text = header_banner.text
         self.banner_close = header_banner.close_button
-        root_layout.addWidget(self.banner)
+        self.banner.hide()
 
         # Center content: left panel + center placeholder. Right is dock (log)
         center = QWidget(root)
+        self._dashboard_center = center
         center_l = QHBoxLayout(center)
         center_l.setContentsMargins(0, 0, 0, 0)
         center_l.setSpacing(8 if self.cfg.density == "compact" else 10)
@@ -312,7 +408,14 @@ class MainWindow(QMainWindow):
         self.list_hint = QLabel(UI.list_hint, self.left_panel)
         self.list_hint.setObjectName("muted")
         self.list_hint.setWordWrap(True)
-        self.list_hint.setVisible(False)
+        # Keep the layout stable: reserve space and update text without toggling visibility,
+        # avoiding reflow/jumps when Scan is pressed.
+        try:
+            fm = self.list_hint.fontMetrics()
+            self.list_hint.setFixedHeight(int(fm.lineSpacing() * 2 + 6))
+        except Exception:
+            pass
+        self.list_hint.setVisible(True)
         # Empty-state and guidance belong directly under Search.
         left_l.addWidget(self.list_hint)
 
@@ -384,10 +487,34 @@ class MainWindow(QMainWindow):
         self.phase_progress.setRange(0, 0)
         self.phase_progress.setTextVisible(False)
         self.phase_progress.setFixedHeight(10)
-        self.phase_progress.setVisible(False)
+        # Keep layout stable: keep progress row visible; SessionPanel will switch it between
+        # indeterminate (busy) and empty (idle).
+        self.phase_progress.setVisible(True)
+        try:
+            self.phase_progress.setProperty("busy", False)
+        except Exception:
+            pass
 
         self.telemetry_label = QLabel(UI.session_inactive, self.mid_panel)
         self.telemetry_label.setWordWrap(True)
+        # Keep the video block stable: reserve space for dynamic status rows above "Live video".
+        # Avoid toggling visibility (which causes layout reflow and shifts the video).
+        try:
+            fm = self.session_label.fontMetrics()
+            self.session_label.setFixedHeight(int(fm.lineSpacing() + 4))
+            # Detail label can wrap; reserve ~2 lines for long car names / i18n.
+            self.detail_label.setWordWrap(True)
+            self.detail_label.setFixedHeight(int(fm.lineSpacing() * 2 + 6))
+        except Exception:
+            try:
+                self.detail_label.setWordWrap(True)
+            except Exception:
+                pass
+        try:
+            self.session_label.setVisible(True)
+            self.detail_label.setVisible(True)
+        except Exception:
+            pass
         mid_l.addWidget(self.session_label)
         mid_l.addWidget(self.detail_label)
         mid_l.addWidget(self.phase_progress)
@@ -497,12 +624,16 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        # Drive banner: non-modal alerts visible even in fullscreen (layout B hides header banner)
-        drive_banner = build_banner(parent=self.video_container, on_close=self._hide_banner)
+        # Drive toast overlay: non-reflow alerts inside the video surface.
+        self._drive_toast_overlay = QWidget(self.video_container)
+        self._drive_toast_overlay.setObjectName("driveToastOverlay")
+        self._drive_toast_overlay.hide()
+
+        drive_banner = build_banner(parent=self._drive_toast_overlay, on_close=self._hide_banner)
         self.drive_banner = drive_banner.widget
         self.drive_banner_text = drive_banner.text
         self.drive_banner_close = drive_banner.close_button
-        grid.addWidget(self.drive_banner, 0, 0, 1, 1, alignment=Qt.AlignBottom | Qt.AlignHCenter)
+        self.drive_banner.hide()
 
         mid_l.addWidget(self.video_container, 1)
         self.telemetry_caption = QLabel(UI.telemetry_label, self.mid_panel)
@@ -512,6 +643,7 @@ class MainWindow(QMainWindow):
         # Settings panel (Layout D)
         self.settings_panel = QWidget(self.mid_panel)
         self.settings_panel.setObjectName("settingsPanel")
+        self.settings_panel.setProperty("card", True)
         sp_l = QVBoxLayout(self.settings_panel)
         sp_l.setContentsMargins(0, 0, 0, 0)
         sp_l.setSpacing(10 if self.cfg.density != "compact" else 8)
@@ -531,6 +663,32 @@ class MainWindow(QMainWindow):
         sc_l = QVBoxLayout(settings_content)
         sc_l.setContentsMargins(0, 0, 0, 0)
         sc_l.setSpacing(12 if self.cfg.density != "compact" else 10)
+
+        # "Current status" is read-only and reflects effective runtime state.
+        self.settings_status_box = QGroupBox(UI.settings_section_status, settings_content)
+        status_form = QFormLayout(self.settings_status_box)
+        status_form.setHorizontalSpacing(12)
+        status_form.setVerticalSpacing(10)
+        self.settings_status_layout_label = QLabel(UI.settings_status_layout, self.settings_status_box)
+        self.settings_status_layout_value = QLabel("", self.settings_status_box)
+        self.settings_status_phase_label = QLabel(UI.settings_status_phase, self.settings_status_box)
+        self.settings_status_phase_value = QLabel("", self.settings_status_box)
+        self.settings_status_fullscreen_label = QLabel(UI.settings_status_fullscreen, self.settings_status_box)
+        self.settings_status_fullscreen_value = QLabel("", self.settings_status_box)
+        self.settings_status_platform_label = QLabel(UI.settings_status_platform, self.settings_status_box)
+        self.settings_status_platform_value = QLabel("", self.settings_status_box)
+        for w in (
+            self.settings_status_layout_value,
+            self.settings_status_phase_value,
+            self.settings_status_fullscreen_value,
+            self.settings_status_platform_value,
+        ):
+            w.setObjectName("muted")
+            w.setWordWrap(True)
+        status_form.addRow(self.settings_status_layout_label, self.settings_status_layout_value)
+        status_form.addRow(self.settings_status_phase_label, self.settings_status_phase_value)
+        status_form.addRow(self.settings_status_fullscreen_label, self.settings_status_fullscreen_value)
+        status_form.addRow(self.settings_status_platform_label, self.settings_status_platform_value)
 
         self.settings_display_box = QGroupBox(UI.settings_section_display, settings_content)
         display_form = QFormLayout(self.settings_display_box)
@@ -566,6 +724,8 @@ class MainWindow(QMainWindow):
         self.settings_auto_scan.setToolTip(UI.settings_tooltip_auto_scan)
         self.settings_auto_connect_single = QCheckBox(UI.settings_auto_connect_single, self.settings_behavior_box)
         self.settings_auto_connect_single.setToolTip(UI.settings_tooltip_auto_connect_single)
+        self.settings_start_fullscreen = QCheckBox(UI.settings_start_fullscreen, self.settings_behavior_box)
+        self.settings_start_fullscreen.setToolTip(UI.settings_tooltip_start_fullscreen)
         self.settings_video_latency = QSpinBox(self.settings_video_box)
         self.settings_video_latency.setRange(0, 250)
         self.settings_video_latency.setSingleStep(10)
@@ -613,6 +773,7 @@ class MainWindow(QMainWindow):
         display_form.addRow(self.settings_language_label, self.settings_language_row)
         behavior_form.addRow("", self.settings_auto_scan)
         behavior_form.addRow("", self.settings_auto_connect_single)
+        behavior_form.addRow("", self.settings_start_fullscreen)
         self.settings_receiver_latency_label = QLabel(UI.settings_receiver_latency_label, self.settings_video_box)
         self.settings_retry_profile_label = QLabel(UI.settings_retry_profile_label, self.settings_video_box)
         self.settings_visible_lines_label = QLabel(UI.settings_visible_lines_label, self.settings_logs_box)
@@ -622,6 +783,7 @@ class MainWindow(QMainWindow):
         logs_form.addRow(self.settings_visible_lines_label, self.settings_log_visible)
         logs_form.addRow(self.settings_stored_lines_label, self.settings_log_store)
 
+        sc_l.addWidget(self.settings_status_box)
         sc_l.addWidget(self.settings_display_box)
         sc_l.addWidget(self.settings_behavior_box)
         sc_l.addWidget(self.settings_video_box)
@@ -635,14 +797,14 @@ class MainWindow(QMainWindow):
         self.settings_copy_diag = QPushButton(UI.settings_copy_diagnostics, btn_row)
         self.settings_copy_diag.setObjectName("secondaryButton")
         self.settings_copy_diag.clicked.connect(self._copy_diagnostics)
-        self.settings_copy_diag.setAccessibleName("Copy diagnostics")
-        self.settings_copy_diag.setAccessibleDescription("Copy system and configuration details to the clipboard")
+        self.settings_copy_diag.setAccessibleName(UI.settings_copy_diag_accessible_name)
+        self.settings_copy_diag.setAccessibleDescription(UI.settings_copy_diag_accessible_desc)
         btn_row_l.addWidget(self.settings_copy_diag)
         self.settings_apply = QPushButton(UI.settings_apply, btn_row)
         self.settings_apply.setObjectName("primaryButton")
         self.settings_apply.clicked.connect(self._apply_settings_from_ui)
-        self.settings_apply.setAccessibleName("Apply settings")
-        self.settings_apply.setAccessibleDescription("Save settings and apply them to the application")
+        self.settings_apply.setAccessibleName(UI.settings_apply_accessible_name)
+        self.settings_apply.setAccessibleDescription(UI.settings_apply_accessible_desc)
         btn_row_l.addWidget(self.settings_apply)
         sp_l.addWidget(btn_row)
 
@@ -652,6 +814,18 @@ class MainWindow(QMainWindow):
         center_l.addWidget(self.mid_panel, 4)
 
         root_layout.addWidget(center, 1)
+
+        # Dedicated Drive root: fullscreen canvas (video + overlays only).
+        self.drive_root = QWidget(root)
+        self.drive_root.setObjectName("driveRoot")
+        dr_l = QVBoxLayout(self.drive_root)
+        dr_l.setContentsMargins(0, 0, 0, 0)
+        dr_l.setSpacing(0)
+        self.drive_root.setVisible(False)
+        root_layout.addWidget(self.drive_root, 1)
+        # Remember where the video lives in the dashboard layout.
+        self._mid_layout = mid_l
+        self._video_dashboard_index = int(mid_l.indexOf(self.video_container))
 
         # Bottom status bar (simple label)
         self.bottom = QLabel("", root)
@@ -675,12 +849,15 @@ class MainWindow(QMainWindow):
             on_filter_changed=self.refresh_log_view,
             on_pause_toggled=self._on_pause_log_toggled,
             on_clear_clicked=self.clear_log,
+            on_toggle_collapsed=self.toggle_system_log_collapsed,
         )
         self.system_log_panel = log_panel.widget
+        self.system_log_title = log_panel.title
         self.log_filter = log_panel.filter
         self.log_view = log_panel.view
         self.btn_pause_log = log_panel.pause_button
         self.btn_clear_log = log_panel.clear_button
+        self.btn_collapse_log = log_panel.collapse_button
         self.btn_pause_log.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
         self.btn_clear_log.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
         self.left_splitter.addWidget(self.system_log_panel)
@@ -694,6 +871,14 @@ class MainWindow(QMainWindow):
         # Persist splitter sizes (cars list vs system log).
         try:
             self._restore_left_splitter_sizes()
+        except Exception:
+            pass
+        # Restore collapsed state (dashboard cleanliness).
+        try:
+            if self.settings is not None:
+                collapsed = bool(int(self.settings.value("ui/log_collapsed", 0) or 0))
+                if collapsed:
+                    self._set_system_log_collapsed(True)
         except Exception:
             pass
         try:
@@ -731,6 +916,7 @@ class MainWindow(QMainWindow):
             search=self.search,
             list_widget=self.list,
             list_hint=self.list_hint,
+            get_is_scanning=lambda: bool(self.is_scanning),
             get_cars=lambda: self.cars,
             get_active_car_id=lambda: self.active_car_id,
             get_preferred_ip=lambda: (
@@ -743,7 +929,7 @@ class MainWindow(QMainWindow):
             get_filtered_indices=lambda: self.filtered_indices,
             get_selected_index=lambda: self.selected_index,
             on_selection_changed=self._update_controls,
-            on_after_filter_applied=lambda: (self._update_controls(), self._refresh_mid_state()),
+            on_after_filter_applied=self._render_state,
         )
 
         self._session_panel = SessionPanel(
@@ -764,11 +950,7 @@ class MainWindow(QMainWindow):
             refresh_video_overlay=self._refresh_video_overlay,
         )
 
-        self._update_controls()
-        self._update_left_hint()
-        self._refresh_mid_state()
-        self._refresh_video_overlay()
-        self._update_bottom_hint()
+        self._render_state()
         try:
             self._sync_header_nav_buttons(
                 str(self.settings.value("layout_id", "A")) if self.settings is not None else "A"
@@ -795,6 +977,17 @@ class MainWindow(QMainWindow):
                 self.settings_auto_scan.setChecked(bool(int(self.settings.value("ui/auto_scan", 1) or 0)))
                 self.settings_auto_connect_single.setChecked(
                     bool(int(self.settings.value("ui/auto_connect_single", 1) or 0))
+                )
+                self.settings_start_fullscreen.setChecked(
+                    bool(
+                        int(
+                            self.settings.value(
+                                "ui/start_fullscreen",
+                                1 if bool(getattr(self.cfg, "start_fullscreen", False)) else 0,
+                            )
+                            or 0
+                        )
+                    )
                 )
                 try:
                     self.settings_video_latency.setValue(int(self.settings.value("video/latency_ms", 60) or 60))
@@ -860,6 +1053,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+L"), self, activated=self.clear_log)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.connect_selected)
         QShortcut(QKeySequence("Ctrl+Shift+F"), self, activated=self.focus_log_filter)
+        QShortcut(QKeySequence("Ctrl+`"), self, activated=self.toggle_system_log_collapsed)
         QShortcut(QKeySequence(Qt.Key_F1), self, activated=self.show_shortcuts_help)
         # Esc handled via keyPressEvent for deterministic priority logic.
 
@@ -894,11 +1088,7 @@ class MainWindow(QMainWindow):
 
         # Refresh dynamic text surfaces that are state-derived (not only static labels).
         try:
-            self._update_controls()
-            self._update_left_hint()
-            self._refresh_mid_state()
-            self._refresh_video_overlay()
-            self._update_bottom_hint()
+            self._render_state()
         except Exception:
             pass
 
@@ -938,6 +1128,29 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # Premium stability: keep header badge widths fixed per language/state set.
+        try:
+            self._apply_header_badge_fixed_widths()
+        except Exception:
+            pass
+        try:
+            self._sync_window_controls()
+        except Exception:
+            pass
+        # Exit confirm modal widgets can be lazily created; keep them in sync with UI language.
+        try:
+            if self._exit_confirm_title is not None:
+                self._exit_confirm_title.setText(strings.exit_confirm_title)
+            if self._exit_confirm_body is not None:
+                # Body copy is per-invocation (risky vs idle); keep a safe default here.
+                self._exit_confirm_body.setText(strings.exit_confirm_body_idle)
+            if self._exit_confirm_btn_cancel is not None:
+                self._exit_confirm_btn_cancel.setText(strings.exit_confirm_cancel)
+            if self._exit_confirm_btn_exit is not None:
+                self._exit_confirm_btn_exit.setText(strings.exit_confirm_exit)
+        except Exception:
+            pass
+
         # Left panel
         try:
             self.search.setPlaceholderText(strings.search_placeholder)
@@ -948,6 +1161,33 @@ class MainWindow(QMainWindow):
             self.btn_connect.setToolTip(strings.connect_tooltip)
             self.btn_disconnect.setText(strings.disconnect_button)
             self.btn_disconnect.setToolTip(strings.disconnect_tooltip)
+        except Exception:
+            pass
+
+        # System log panel (embedded)
+        try:
+            if getattr(self, "system_log_title", None) is not None:
+                self.system_log_title.setText(strings.log_dock_title)
+            self.log_filter.setPlaceholderText(strings.log_filter_placeholder)
+            self.btn_pause_log.setToolTip(strings.log_pause_tooltip)
+            self.btn_clear_log.setToolTip(strings.log_clear_tooltip)
+            # Keep current pause state label consistent.
+            self.btn_pause_log.setText(strings.log_resume if self.btn_pause_log.isChecked() else strings.log_pause)
+            self.btn_clear_log.setText(strings.log_clear)
+            if getattr(self, "btn_collapse_log", None) is not None:
+                self.btn_collapse_log.setAccessibleName(strings.log_toggle_accessible_name)
+                self.btn_collapse_log.setAccessibleDescription(strings.log_toggle_accessible_desc)
+                # Re-apply the glyph according to current collapsed state.
+                try:
+                    sizes = self.left_splitter.sizes()
+                    collapsed = bool(sizes and len(sizes) > 1 and int(sizes[1]) <= 1)
+                except Exception:
+                    collapsed = False
+                self.btn_collapse_log.setText(
+                    strings.log_collapse_glyph_collapsed if collapsed else strings.log_collapse_glyph_expanded
+                )
+            # Refresh empty placeholder text if log is empty.
+            self.refresh_log_view()
         except Exception:
             pass
 
@@ -969,10 +1209,15 @@ class MainWindow(QMainWindow):
         # Settings panel
         try:
             self.settings_title.setText(strings.settings_title)
+            self.settings_status_box.setTitle(strings.settings_section_status)
             self.settings_display_box.setTitle(strings.settings_section_display)
             self.settings_behavior_box.setTitle(strings.settings_section_behavior)
             self.settings_video_box.setTitle(strings.settings_section_video)
             self.settings_logs_box.setTitle(strings.settings_section_logs)
+            self.settings_status_layout_label.setText(strings.settings_status_layout)
+            self.settings_status_phase_label.setText(strings.settings_status_phase)
+            self.settings_status_fullscreen_label.setText(strings.settings_status_fullscreen)
+            self.settings_status_platform_label.setText(strings.settings_status_platform)
             self.settings_theme_label.setText(strings.settings_theme_label)
             self.settings_density_label.setText(strings.settings_density_label)
             self.settings_language_label.setText(strings.settings_language_label)
@@ -990,12 +1235,23 @@ class MainWindow(QMainWindow):
             self.settings_auto_scan.setToolTip(strings.settings_tooltip_auto_scan)
             self.settings_auto_connect_single.setText(strings.settings_auto_connect_single)
             self.settings_auto_connect_single.setToolTip(strings.settings_tooltip_auto_connect_single)
+            self.settings_start_fullscreen.setText(strings.settings_start_fullscreen)
+            self.settings_start_fullscreen.setToolTip(strings.settings_tooltip_start_fullscreen)
             self.settings_video_latency.setToolTip(strings.settings_tooltip_receiver_latency)
             self.settings_retry_profile.setToolTip(strings.settings_tooltip_retry_profile)
             self.settings_log_visible.setToolTip(strings.settings_tooltip_visible_lines)
             self.settings_log_store.setToolTip(strings.settings_tooltip_stored_lines)
             self.settings_copy_diag.setText(strings.settings_copy_diagnostics)
             self.settings_apply.setText(strings.settings_apply)
+            self.settings_copy_diag.setAccessibleName(strings.settings_copy_diag_accessible_name)
+            self.settings_copy_diag.setAccessibleDescription(strings.settings_copy_diag_accessible_desc)
+            self.settings_apply.setAccessibleName(strings.settings_apply_accessible_name)
+            self.settings_apply.setAccessibleDescription(strings.settings_apply_accessible_desc)
+        except Exception:
+            pass
+        try:
+            self._sync_settings_capabilities()
+            self._update_settings_status()
         except Exception:
             pass
 
@@ -1055,6 +1311,75 @@ class MainWindow(QMainWindow):
     def _update_bottom_hint(self) -> None:
         self._session_panel.update_bottom_hint(is_connected=bool(self.is_connected))
 
+    # ---------------- Settings: effective state ----------------
+    def _settings_layout_name(self, layout_id: str) -> str:
+        s = getattr(self, "_ui", UI)
+        v = str(layout_id or "").strip().upper() or "A"
+        if v == "B":
+            return s.settings_layout_b
+        if v == "C":
+            return s.settings_layout_c
+        if v == "D":
+            return s.settings_layout_d
+        return s.settings_layout_a
+
+    def _settings_phase_name(self) -> str:
+        s = getattr(self, "_ui", UI)
+        try:
+            p = self.phase
+        except Exception:
+            p = None
+        try:
+            if p == AppPhase.SCANNING:
+                return s.badge_scanning
+            if p == AppPhase.CONNECTING:
+                return s.badge_connecting
+            if p == AppPhase.DISCONNECTING:
+                return s.badge_disconnecting
+            if p == AppPhase.CONNECTED:
+                return s.badge_connected
+        except Exception:
+            pass
+        return s.badge_disconnected
+
+    def _sync_settings_capabilities(self) -> None:
+        """Enable/disable settings that are not effectively supported on this platform."""
+        try:
+            if not hasattr(self, "settings_start_fullscreen"):
+                return
+            s = getattr(self, "_ui", UI)
+            if self._is_wayland():
+                self.settings_start_fullscreen.setEnabled(False)
+                self.settings_start_fullscreen.setToolTip(s.settings_tooltip_start_fullscreen_disabled_wayland)
+            else:
+                self.settings_start_fullscreen.setEnabled(True)
+                self.settings_start_fullscreen.setToolTip(s.settings_tooltip_start_fullscreen)
+        except Exception:
+            pass
+
+    def _update_settings_status(self) -> None:
+        try:
+            if not hasattr(self, "settings_status_layout_value"):
+                return
+            s = getattr(self, "_ui", UI)
+            layout_id = str(getattr(self, "_layout_id", "A") or "A").strip().upper() or "A"
+            self.settings_status_layout_value.setText(self._settings_layout_name(layout_id))
+            self.settings_status_phase_value.setText(self._settings_phase_name())
+            is_fs = False
+            try:
+                is_fs = bool(self.isFullScreen())
+            except Exception:
+                try:
+                    is_fs = bool(self.windowState() & Qt.WindowFullScreen)
+                except Exception:
+                    is_fs = False
+            self.settings_status_fullscreen_value.setText(s.settings_value_yes if is_fs else s.settings_value_no)
+            self.settings_status_platform_value.setText(
+                s.settings_platform_wayland if self._is_wayland() else s.settings_platform_x11
+            )
+        except Exception:
+            pass
+
     # ---------------- Persistence / layouts ----------------
     def _restore_layout(self) -> None:
         if self.settings is None:
@@ -1076,10 +1401,42 @@ class MainWindow(QMainWindow):
         return layout_id if layout_id in ("A", "B", "C", "D") else "A"
 
     def _toggle_maximize_restore(self) -> None:
+        # Wayland/WSLg: window-state transitions can be flaky early in a configure cycle.
+        # Always apply via the "wait for non-zero size" guard to avoid 0x0 transitions.
         if self.isMaximized():
-            self.showNormal()
+            self._run_when_window_has_size(self.showNormal)
         else:
-            self.showMaximized()
+            self._run_when_window_has_size(self.showMaximized)
+        try:
+            self._sync_window_controls()
+        except Exception:
+            pass
+
+    def changeEvent(self, event) -> None:
+        # Keep window controls coherent with actual window state.
+        try:
+            if event is not None and event.type() == QEvent.Type.WindowStateChange:
+                try:
+                    self._sync_window_controls()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        super().changeEvent(event)
+
+    def _sync_window_controls(self) -> None:
+        """
+        Premium: tooltips reflect maximize vs restore state.
+        Keep strings sourced from UI (i18n guardrail).
+        """
+        if getattr(self, "btn_win_min", None) is not None:
+            self.btn_win_min.setToolTip(UI.window_minimize_tooltip)
+        if getattr(self, "btn_win_close", None) is not None:
+            self.btn_win_close.setToolTip(UI.window_close_tooltip)
+        if getattr(self, "btn_win_max", None) is not None:
+            maximized = bool(self.isMaximized())
+            self.btn_win_max.setToolTip(UI.window_restore_tooltip if maximized else UI.window_maximize_tooltip)
+            self.btn_win_max.setText(UI.window_restore_glyph if maximized else UI.window_maximize_glyph)
 
     def _start_system_move(self) -> None:
         # Best-effort: delegate move to the window manager.
@@ -1091,266 +1448,16 @@ class MainWindow(QMainWindow):
             pass
 
     def apply_layout(self, layout_id: str) -> None:
-        if self.settings is None:
-            return
-        # No-op if already in the requested layout.
-        # This avoids unnecessary fade transitions (and potential flicker) when buttons are clicked
-        # repeatedly or when a layout is re-applied by state changes.
-        try:
-            want = str(layout_id or "").strip().upper()
-            if want not in ("A", "B", "C", "D"):
-                want = "A"
-            cur = str(getattr(self, "_layout_id", "") or "").strip().upper()
-            if cur and cur == want:
-                return
-        except Exception:
-            pass
-        # Avoid re-entrant transitions (e.g., repeated hotkeys).
-        if self._layout_transition_in_progress:
-            self._layout_transition_queued = layout_id
-            return
+        _apply_layout_mgr(self, layout_id)
 
-        # Tests/CI: the offscreen platform has no real compositor timing and animations
-        # can make layout changes non-deterministic. Apply immediately.
-        try:
-            import os
-
-            if str(os.environ.get("QT_QPA_PLATFORM", "") or "") == "offscreen":
-                self._apply_layout_now(layout_id)
-                return
-        except Exception:
-            pass
-
-        # If we're not visible yet, apply immediately (no animation).
-        if not self.isVisible():
-            self._apply_layout_now(layout_id)
-            return
-
-        # Safety: avoid layout transition animation while connecting/disconnecting.
-        # Some compositors (Wayland/WSLg) are fragile during rapid state changes.
-        if bool(self.is_connecting) or bool(self.phase == AppPhase.DISCONNECTING):
-            self._apply_layout_now(layout_id)
-            return
-
-        self._layout_transition_in_progress = True
-        self._layout_transition_current = layout_id
-        self._layout_transition_queued = None
-
-        def _after_fade_out() -> None:
-            try:
-                self._apply_layout_now(layout_id)
-            finally:
-                # Fade back in, then allow next transition if queued.
-                QTimer.singleShot(
-                    0,
-                    lambda: self._fade_overlay_to(
-                        0.0,
-                        ms=200,
-                        on_done=self._on_layout_fade_in_done,
-                    ),
-                )
-
-        self._fade_overlay_to(1.0, ms=200, on_done=_after_fade_out)
+    def _force_end_layout_transition_if_stuck(self) -> None:
+        _force_end_layout_transition_if_stuck_mgr(self)
 
     def _on_layout_fade_in_done(self) -> None:
-        self._layout_transition_in_progress = False
-        current = self._layout_transition_current
-        queued = self._layout_transition_queued
-        self._layout_transition_current = None
-        self._layout_transition_queued = None
-        if queued is not None and queued != current:
-            self.apply_layout(queued)
+        _on_layout_fade_in_done_mgr(self)
 
     def _apply_layout_now(self, layout_id: str) -> None:
-        if self.settings is None:
-            return
-        # Reduce flicker during window-state changes (frameless/fullscreen).
-        # Important: layout changes happen while central content is fully faded out.
-        self.setUpdatesEnabled(False)
-        try:
-            # Normalize + persist layout id early (single source of truth).
-            layout_id = layout_id if layout_id in ("A", "B", "C", "D") else "A"
-            # Keep a runtime copy so navigation does not depend on check-state timing.
-            self._layout_id = layout_id
-            self.settings.setValue("layout_id", layout_id)
-            if layout_id == "B":
-                # ---------------- Drive Mode (layout B) ----------------
-                self._pre_drive_was_maximized = bool(self.isMaximized())
-                self.btn_drive.setChecked(True)
-                self.btn_debug.setChecked(False)
-                self.btn_settings.setChecked(False)
-                self._sync_header_nav_buttons(layout_id)
-
-                # Hide everything non-essential
-                self.header_widget.hide()
-                self.banner.hide()
-                self.left_panel.hide()
-                self.bottom.hide()
-                self.telemetry_dock.hide()
-                self.trace_dock.hide()
-
-                # Essential Drive overlays
-                # Entering Drive from Settings must deterministically restore the video surface.
-                try:
-                    self.settings_panel.setVisible(False)
-                    self.video_container.setVisible(True)
-                except Exception:
-                    pass
-                self.hud.setVisible(True)
-                # Pure focus: only 3 signals (STATE/MOZA/VIDEO)
-                self.hud_output.setVisible(False)
-                self.btn_overlay_disconnect.setVisible(bool(self.is_connected))
-                self.drive_guard_overlay.setVisible(not bool(self.is_connected))
-                # Dashboard-only labels: hide in Drive to avoid visual overlap with overlays.
-                try:
-                    self.live_video_label.setVisible(False)
-                    self.telemetry_caption.setVisible(False)
-                    self.telemetry_label.setVisible(False)
-                except Exception:
-                    pass
-                # Drive guard: suppress underlying "video not available" text behind the translucent overlay.
-                try:
-                    if not bool(self.is_connected):
-                        self.video_view.setVisible(False)
-                        self.video_overlay.setVisible(False)
-                    else:
-                        self.video_view.setVisible(True)
-                        # video_overlay is managed by _refresh_video_overlay() based on frames
-                except Exception:
-                    pass
-                # Drive guard: show an explicit escape hatch only when disconnected.
-                try:
-                    self.drive_guard_action.setVisible(not bool(self.is_connected))
-                except Exception:
-                    pass
-                # Make guard state fully deterministic on entry (no bleed-through).
-                try:
-                    self._apply_drive_guard_state()
-                except Exception:
-                    pass
-                # `drive_banner` visibility is controlled by _show_banner() based on drive layout.
-                self.drive_banner.setVisible(False)
-
-                # Deterministic layering (bottom->top): video, guard, HUD/banners/disconnect
-                try:
-                    self.drive_guard_overlay.raise_()
-                    self.hud.raise_()
-                    self.btn_overlay_disconnect.raise_()
-                    self.drive_banner.raise_()
-                except Exception:
-                    pass
-
-                # Wayland/WSLg is fragile with fullscreen transitions.
-                # - Wayland/WSLg: borderless maximized (frameless + maximized)
-                # - X11: fullscreen
-                if self._is_wayland():
-                    # Avoid redundant maximized transitions to reduce compositor flicker.
-                    if not self.isMaximized():
-                        self._run_when_window_has_size(self.showMaximized)
-                else:
-                    self._run_when_window_has_size(self.showFullScreen)
-                # Safety hint: frameless fullscreen needs a clear escape hatch.
-                self._show_banner("muted", UI.drive_mode_hint, auto_hide_ms=0)
-                self._update_bottom_hint()
-            else:
-                # ---------------- Dashboard/Monitor/Settings (layouts A/C/D) ----------------
-                # Exit Drive Mode: restore the operator's prior window state.
-                if not self._is_wayland():
-                    if self._pre_drive_was_maximized:
-                        self._run_when_window_has_size(self.showMaximized)
-                    else:
-                        self._run_when_window_has_size(self.showNormal)
-                self.btn_drive.setChecked(False)
-                self.btn_overlay_disconnect.setVisible(False)
-                self.hud.setVisible(False)
-                self.drive_banner.setVisible(False)
-                self.drive_guard_overlay.setVisible(False)
-                self.hud_output.setVisible(True)
-                try:
-                    self.live_video_label.setVisible(True)
-                    self.telemetry_caption.setVisible(True)
-                    self.telemetry_label.setVisible(True)
-                except Exception:
-                    pass
-                try:
-                    self.video_view.setVisible(True)
-                    self._refresh_video_overlay()
-                except Exception:
-                    pass
-                try:
-                    self.drive_guard_action.setVisible(True)
-                except Exception:
-                    pass
-
-                # Show normal chrome
-                self.header_widget.show()
-                self.banner.setVisible(bool(self.banner_text.text().strip()))
-                # Panels (C): monitor view, no sidebar duplication.
-                if layout_id == "C":
-                    self.left_panel.hide()
-                else:
-                    self.left_panel.show()
-                self.bottom.show()
-                if layout_id == "C":
-                    self.telemetry_dock.show()
-                    self.trace_dock.show()
-                    self.btn_debug.setChecked(True)
-                    self.btn_settings.setChecked(False)
-                    # Hide embedded log panel in monitor mode (no duplication).
-                    try:
-                        self.log_dock.hide()
-                    except Exception:
-                        pass
-                    # Monitor mode should focus on video + telemetry.
-                    try:
-                        self.settings_panel.setVisible(False)
-                        self.video_container.setVisible(True)
-                        # Hide dashboard telemetry summary; docks are the monitor surface.
-                        self.telemetry_caption.setVisible(False)
-                        self.telemetry_label.setVisible(False)
-                        self.live_video_label.setVisible(True)
-                    except Exception:
-                        pass
-                elif layout_id == "D":
-                    # Settings: no docks, no sidebar, show settings panel.
-                    self.btn_debug.setChecked(False)
-                    self.btn_settings.setChecked(True)
-                    self.telemetry_dock.hide()
-                    self.trace_dock.hide()
-                    try:
-                        self.log_dock.hide()
-                    except Exception:
-                        pass
-                    self.left_panel.hide()
-                    try:
-                        self.settings_panel.setVisible(True)
-                        self.video_container.setVisible(False)
-                        self.telemetry_caption.setVisible(False)
-                        self.telemetry_label.setVisible(False)
-                        self.live_video_label.setVisible(False)
-                    except Exception:
-                        pass
-                else:
-                    self.btn_debug.setChecked(False)
-                    self.btn_settings.setChecked(False)
-                    self.telemetry_dock.hide()
-                    self.trace_dock.hide()
-                    try:
-                        self.log_dock.show()
-                    except Exception:
-                        pass
-                    try:
-                        self.settings_panel.setVisible(False)
-                        self.video_container.setVisible(True)
-                        self.live_video_label.setVisible(True)
-                        self.telemetry_caption.setVisible(True)
-                        self.telemetry_label.setVisible(True)
-                    except Exception:
-                        pass
-                self._sync_header_nav_buttons(layout_id)
-                self._update_bottom_hint()
-        finally:
-            self.setUpdatesEnabled(True)
+        _apply_layout_now_impl_mgr(self, layout_id)
 
     def _sync_header_nav_buttons(self, layout_id: str) -> None:
         """
@@ -1483,6 +1590,7 @@ class MainWindow(QMainWindow):
         density = str(self.settings_density.currentData() or "normal")
         auto_scan = bool(self.settings_auto_scan.isChecked())
         auto_connect_single = bool(self.settings_auto_connect_single.isChecked())
+        start_fullscreen = bool(self.settings_start_fullscreen.isChecked())
         video_latency = int(self.settings_video_latency.value())
         retry_profile = str(self.settings_retry_profile.currentData() or "stable")
         log_visible = int(self.settings_log_visible.currentText() or "500")
@@ -1492,6 +1600,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("ui/density", density)
         self.settings.setValue("ui/auto_scan", 1 if auto_scan else 0)
         self.settings.setValue("ui/auto_connect_single", 1 if auto_connect_single else 0)
+        self.settings.setValue("ui/start_fullscreen", 1 if start_fullscreen else 0)
         self.settings.setValue("video/latency_ms", video_latency)
         self.settings.setValue("video/retry_profile", retry_profile)
         self.settings.setValue("log/visible_lines", log_visible)
@@ -1518,6 +1627,17 @@ class MainWindow(QMainWindow):
             pass
         try:
             self._show_banner("ok", UI.settings_banner_applied, auto_hide_ms=2000)
+        except Exception:
+            pass
+
+        # Apply fullscreen preference immediately when safe (avoid Wayland/WSLg transitions).
+        try:
+            if not self._is_wayland():
+                if start_fullscreen:
+                    self._run_when_window_has_size(self.showFullScreen)
+                else:
+                    if self.isFullScreen():
+                        self.showNormal()
         except Exception:
             pass
 
@@ -1597,6 +1717,13 @@ class MainWindow(QMainWindow):
 
     # ---------------- Core actions ----------------
     def start_scan(self) -> None:
+        # Strict phase gating: never start a scan while disconnecting (even if thread has already ended).
+        try:
+            if bool(self.is_connected) or bool(getattr(self, "phase", None) == AppPhase.DISCONNECTING):
+                self._show_banner("warn", UI.active_session_disconnect_first)
+                return
+        except Exception:
+            pass
         # If a scan is already running, Scan acts as Cancel.
         if bool(self.is_scanning) or (
             self.controller.scan_thread is not None and self.controller.scan_thread.is_alive()
@@ -1609,15 +1736,24 @@ class MainWindow(QMainWindow):
         if self.controller.scan_thread is not None and self.controller.scan_thread.is_alive():
             return
         self.is_scanning = True
-        self._apply_primary_state_badge(AppPhase.SCANNING)
-        self._update_left_hint()
-        self._update_controls()
+        try:
+            self.phase = AppPhase.SCANNING
+        except Exception:
+            pass
+        self._render_state()
         started = self.controller.start_scan()
         if not started:
             self.is_scanning = False
-            self._apply_primary_state_badge(AppPhase.IDLE)
-            self._update_left_hint()
-            self._update_controls()
+            try:
+                self.phase = AppPhase.IDLE
+            except Exception:
+                pass
+            self._render_state()
+            return
+        # Premium UX: short, dedicated toast copy (no layout shift).
+        self._show_banner("accent", UI.toast_scan_started, auto_hide_ms=1200)
+        # High-signal log entry (non-spam): start of an operator action.
+        self.append_log("INFO", UI.toast_scan_started)
         self._refresh_pulse_state()
 
     def cancel_scan(self) -> None:
@@ -1629,11 +1765,15 @@ class MainWindow(QMainWindow):
         except Exception:
             cancelled = False
         if cancelled:
+            # Premium UX: immediate feedback that we're stopping the scan.
+            self._show_banner("muted", UI.toast_scan_cancelling, auto_hide_ms=1200)
             # Keep showing SCANNING until ScanDoneEvent arrives.
             self.is_scanning = True
-            self._apply_primary_state_badge(AppPhase.SCANNING)
-            self._update_left_hint()
-            self._update_controls()
+            try:
+                self.phase = AppPhase.SCANNING
+            except Exception:
+                pass
+            self._render_state()
 
     def connect_selected(self) -> None:
         if self.controller.drive_thread is not None and self.controller.drive_thread.is_alive():
@@ -1659,14 +1799,20 @@ class MainWindow(QMainWindow):
         self.detail_label.setText(f"{car.name} ({car.ip}:{car.control_port})")
         self.badge_moza.setText(format_moza_badge(state="wait"))
         self.is_connecting = True
-        self._apply_primary_state_badge(AppPhase.CONNECTING)
-        self._update_controls()
+        try:
+            self.phase = AppPhase.CONNECTING
+        except Exception:
+            pass
+        self._render_state()
 
         ok = self.controller.connect(car)
         if not ok:
             self.is_connecting = False
-            self._apply_primary_state_badge(AppPhase.IDLE)
-            self._update_controls()
+            try:
+                self.phase = AppPhase.IDLE
+            except Exception:
+                pass
+            self._render_state()
             self._show_banner("warn", UI.unable_start_session_active)
             return
         self._start_video_for_car(car)
@@ -1686,10 +1832,14 @@ class MainWindow(QMainWindow):
             self.active_car_id = None
             self._refresh_car_row_active_styles()
             self.is_connecting = False
-            self._update_controls()
+            self._render_state()
             return
         self.append_log("WARN", UI.disconnect_requested)
-        self._apply_primary_state_badge(AppPhase.DISCONNECTING)
+        try:
+            self.phase = AppPhase.DISCONNECTING
+        except Exception:
+            pass
+        self._render_state()
         try:
             self.controller.disconnect()
         except Exception:
@@ -1698,7 +1848,22 @@ class MainWindow(QMainWindow):
 
     def set_connection_state(self, connected: bool) -> None:
         self.is_connected = connected
-        self._apply_primary_state_badge(AppPhase.CONNECTED if connected else AppPhase.IDLE)
+        if connected:
+            if self._session_started_mono is None:
+                try:
+                    self._session_started_mono = float(time.monotonic())
+                except Exception:
+                    self._session_started_mono = None
+        else:
+            self._session_started_mono = None
+        try:
+            self._update_time_badge()
+        except Exception:
+            pass
+        try:
+            self.phase = AppPhase.CONNECTED if connected else AppPhase.IDLE
+        except Exception:
+            pass
         self.btn_connect.setEnabled(not connected)
         # Overlay disconnect must always be accessible in Drive Mode (fullscreen or windowed).
         if self.btn_drive.isChecked():
@@ -1707,9 +1872,83 @@ class MainWindow(QMainWindow):
             # Senior guard: ensure the drive guard + underlying video layers are coherent immediately,
             # without waiting for the next timer tick (prevents "Video not available" bleed-through).
             self._apply_drive_guard_state()
-        self._update_controls()
-        self._update_bottom_hint()
-        self._refresh_pulse_state()
+        self._render_state()
+
+    def _update_time_badge(self) -> None:
+        """
+        Keep the center header time badge stable and lightweight.
+        - When connected: show elapsed time since session started.
+        - Otherwise: show placeholder.
+        """
+        if getattr(self, "badge_time", None) is None:
+            return
+        start = self._session_started_mono
+        if start is None:
+            self.badge_time.setText(UI.badge_time_placeholder)
+            self._set_badge_kind(self.badge_time, "muted")
+            return
+        try:
+            elapsed = max(0.0, float(time.monotonic()) - float(start))
+        except Exception:
+            elapsed = 0.0
+        total_s = int(elapsed)
+        h = total_s // 3600
+        m = (total_s % 3600) // 60
+        s = total_s % 60
+        if h > 0:
+            txt = f"{h:02d}:{m:02d}:{s:02d}"
+        else:
+            txt = f"{m:02d}:{s:02d}"
+        self.badge_time.setText(txt)
+        self._set_badge_kind(self.badge_time, "ok" if self.is_connected else "muted")
+
+    def _apply_header_badge_fixed_widths(self) -> None:
+        """
+        Pixel-perfect premium header: avoid horizontal jitter by fixing badge widths
+        to the maximum expected text width (current UI language).
+        """
+        if getattr(self, "badge_conn", None) is None:
+            return
+
+        def _fix(label: QLabel, candidates: list[str], *, pad_px: int = 18) -> None:
+            fm = label.fontMetrics()
+            w = 0
+            for t in candidates:
+                try:
+                    w = max(w, int(fm.horizontalAdvance(str(t))))
+                except Exception:
+                    pass
+            w = int(max(30, w + int(pad_px)))
+            label.setFixedWidth(w)
+
+        s = self._ui
+        # Connection badge can cycle through all phases.
+        _fix(
+            self.badge_conn,
+            [
+                s.badge_scanning,
+                s.badge_connecting,
+                s.badge_disconnecting,
+                s.badge_connected,
+                s.badge_disconnected,
+            ],
+        )
+        # MOZA badge uses glyphs + fixed-width tokens.
+        _fix(
+            self.badge_moza,
+            [
+                format_moza_badge(state="ok"),
+                format_moza_badge(state="no"),
+                format_moza_badge(state="wait"),
+                format_moza_badge(state="unknown"),
+            ],
+        )
+        # Video badge is a simple ON/OFF surface.
+        _fix(self.badge_video, [s.badge_video_on, s.badge_video_off])
+        # Output is monospaced but keep fixed width anyway (sign + 3 decimals).
+        _fix(self.badge_output, ["+0.000", "-1.000"])
+        # Time badge can expand to hh:mm:ss.
+        _fix(self.badge_time, [s.badge_time_placeholder, "99:59:59"])
 
     def _apply_drive_guard_state(self) -> None:
         """
@@ -1769,6 +2008,56 @@ class MainWindow(QMainWindow):
         self.hud_conn.setText(text)
         self._set_badge_kind(self.hud_conn, kind)
 
+    def _render_state(self) -> None:
+        """
+        Single render entrypoint for dashboard state.
+
+        Senior-pro invariant: if you need to refresh UI for a state change, call this.
+        Avoid calling individual _update_* methods from event handlers to prevent drift.
+        """
+        try:
+            phase = getattr(self, "phase", None)
+            if phase is not None:
+                self._apply_primary_state_badge(phase)
+        except Exception:
+            pass
+        try:
+            self._update_controls()
+        except Exception:
+            pass
+        try:
+            self._refresh_mid_state()
+        except Exception:
+            pass
+        try:
+            self._update_left_hint()
+        except Exception:
+            pass
+        try:
+            self._refresh_video_overlay()
+        except Exception:
+            pass
+        try:
+            self._update_bottom_hint()
+        except Exception:
+            pass
+        try:
+            self._apply_drive_guard_state()
+        except Exception:
+            pass
+        try:
+            self._refresh_pulse_state()
+        except Exception:
+            pass
+        try:
+            self._sync_settings_capabilities()
+        except Exception:
+            pass
+        try:
+            self._update_settings_status()
+        except Exception:
+            pass
+
     def _update_controls(self) -> None:
         has_selection = self.selected_index is not None and 0 <= int(self.selected_index) < len(self.filtered_indices)
         self._session_panel.update_controls(
@@ -1780,13 +2069,18 @@ class MainWindow(QMainWindow):
             filtered_indices_len=int(len(self.filtered_indices)),
             selected_index=self.selected_index,
         )
-        # Reduce duplicated status: header badges are primary.
-        # Keep detailed status only while scanning/connecting (connected UI should be clean).
+        # Keep layout stable: never toggle visibility for rows above the video block.
+        # Instead, clear text when we don't want to show status.
         show_status = bool(self.is_scanning or self.is_connecting)
-        if self.session_label.isVisible() != show_status:
-            self.session_label.setVisible(show_status)
-        if self.detail_label.isVisible() != show_status:
-            self.detail_label.setVisible(show_status)
+        if not show_status:
+            try:
+                self.session_label.setText("")
+            except Exception:
+                pass
+            try:
+                self.detail_label.setText("")
+            except Exception:
+                pass
 
         # Telemetry summary is the persistent dashboard readout.
         # Only overwrite when we don't have a live telemetry payload to show.
@@ -1803,24 +2097,21 @@ class MainWindow(QMainWindow):
                     self.telemetry_label.setText(UI.session_inactive)
         except Exception:
             pass
-        self._refresh_mid_state()
-        self._update_left_hint()
+        # NOTE: mid-state and left-hint are rendered via _render_state() only.
 
     def _update_left_hint(self) -> None:
         # One compact hint under Search; avoid duplicated status elsewhere.
         if self.is_connected:
-            self.list_hint.setVisible(False)
+            # Preserve reserved space to avoid layout jumps.
+            self.list_hint.setText("")
             return
         if self.is_scanning:
             self.list_hint.setText(UI.list_hint_scanning)
-            self.list_hint.setVisible(True)
             return
         if self.cars:
             self.list_hint.setText(UI.list_hint_found.format(count=len(self.cars)))
-            self.list_hint.setVisible(True)
             return
         self.list_hint.setText(UI.list_hint)
-        self.list_hint.setVisible(True)
 
     def _refresh_mid_state(self) -> None:
         has_selection = self.selected_index is not None and 0 <= int(self.selected_index) < len(self.filtered_indices)
@@ -1917,8 +2208,46 @@ class MainWindow(QMainWindow):
 
     def _show_banner(self, kind: str, text: str, *, auto_hide_ms: int = 5000) -> None:
         msg = str(text)
+        kind = str(kind or "muted")
+
+        # Enterprise: dedupe + priority. Avoid toast spam and avoid downgrading danger.
+        prio = {"danger": 3, "warn": 2, "accent": 1, "ok": 1, "muted": 0}
+        try:
+            now_ms = int(time.time() * 1000)
+        except Exception:
+            now_ms = 0
+
+        try:
+            cur_kind = str(self.banner.property("bannerKind") or "")
+        except Exception:
+            cur_kind = ""
+
+        # If a danger toast is visible, do not overwrite it with lower priority messages.
+        try:
+            if self.banner.isVisible() and prio.get(cur_kind, 0) >= prio.get("danger", 3) and prio.get(kind, 0) < 3:
+                return
+        except Exception:
+            pass
+
+        # Dedupe: if we just showed the same toast very recently, ignore.
+        try:
+            if (
+                msg == self._toast_last_msg
+                and kind == self._toast_last_kind
+                and (now_ms - int(self._toast_last_ts_ms)) < 800
+            ):
+                return
+        except Exception:
+            pass
         self._banner_token += 1
         token = int(self._banner_token)
+
+        try:
+            self._toast_last_msg = msg
+            self._toast_last_kind = kind
+            self._toast_last_ts_ms = int(now_ms)
+        except Exception:
+            pass
 
         if self.banner.property("bannerKind") != kind:
             self.banner.setProperty("bannerKind", kind)
@@ -1928,23 +2257,95 @@ class MainWindow(QMainWindow):
             self.banner_text.setText(msg)
         if not self.banner.isVisible():
             self.banner.setVisible(True)
+        try:
+            if self._toast_overlay is not None and not self._toast_overlay.isVisible():
+                self._toast_overlay.show()
+            self._position_toast_overlay()
+        except Exception:
+            pass
+        # Premium: slide-down + fade in (avoid reflow, keep it subtle).
+        try:
+            if self._toast_effect is None:
+                eff = QGraphicsOpacityEffect(self.banner)
+                eff.setOpacity(1.0)
+                self.banner.setGraphicsEffect(eff)
+                self._toast_effect = eff
+            if self._toast_effect is not None:
+                self._toast_effect.setOpacity(0.0)
+                if self._toast_anim is not None:
+                    try:
+                        self._toast_anim.stop()
+                    except Exception:
+                        pass
+                anim = QVariantAnimation(self.banner)
+                anim.setDuration(160)
+                anim.setEasingCurve(QEasingCurve.OutCubic)
 
-        # Also mirror in Drive Mode where the header banner is hidden.
-        if self.drive_banner.property("bannerKind") != kind:
-            self.drive_banner.setProperty("bannerKind", kind)
-            self.drive_banner.style().unpolish(self.drive_banner)
-            self.drive_banner.style().polish(self.drive_banner)
-        if self.drive_banner_text.text() != msg:
-            self.drive_banner_text.setText(msg)
-        # Drive banner must be visible in Drive layout, even if Drive is windowed (Wayland/WSLg).
+                def _on_val(v) -> None:
+                    try:
+                        if self._toast_effect is not None:
+                            self._toast_effect.setOpacity(float(v))
+                        if self._toast_anchor is not None:
+                            # Slide from slightly higher y to anchor y.
+                            dy = int(round((1.0 - float(v)) * 6.0))
+                            if self._toast_overlay is not None:
+                                self._toast_overlay.move(int(self._toast_anchor.x()), int(self._toast_anchor.y() - dy))
+                    except Exception:
+                        pass
+
+                anim.valueChanged.connect(_on_val)
+                anim.setStartValue(0.0)
+                anim.setEndValue(1.0)
+                anim.start()
+                self._toast_anim = anim
+        except Exception:
+            pass
+
+        # Drive Mode: use the drive toast overlay instead of the header toast.
         want_drive_visible = bool(self.btn_drive.isChecked())
-        if self.drive_banner.isVisible() != want_drive_visible:
-            self.drive_banner.setVisible(want_drive_visible)
         try:
             if want_drive_visible:
-                self.drive_banner.raise_()
-                self.hud.raise_()
-                self.btn_overlay_disconnect.raise_()
+                # Hide header toast to avoid duplicates/solapados.
+                try:
+                    self.banner.setVisible(False)
+                    if self._toast_overlay is not None:
+                        self._toast_overlay.hide()
+                except Exception:
+                    pass
+
+                if self.drive_banner.property("bannerKind") != kind:
+                    self.drive_banner.setProperty("bannerKind", kind)
+                    self.drive_banner.style().unpolish(self.drive_banner)
+                    self.drive_banner.style().polish(self.drive_banner)
+                if self.drive_banner_text.text() != msg:
+                    self.drive_banner_text.setText(msg)
+                if not self.drive_banner.isVisible():
+                    self.drive_banner.setVisible(True)
+                try:
+                    if (
+                        getattr(self, "_drive_toast_overlay", None) is not None
+                        and not self._drive_toast_overlay.isVisible()
+                    ):
+                        self._drive_toast_overlay.show()
+                    self._position_drive_toast_overlay()
+                except Exception:
+                    pass
+
+                try:
+                    self._drive_toast_overlay.raise_()
+                    self.drive_banner.raise_()
+                    self.hud.raise_()
+                    self.btn_overlay_disconnect.raise_()
+                except Exception:
+                    pass
+            else:
+                # Not in Drive: ensure drive toast is hidden.
+                try:
+                    self.drive_banner.setVisible(False)
+                    if getattr(self, "_drive_toast_overlay", None) is not None:
+                        self._drive_toast_overlay.hide()
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -1968,8 +2369,66 @@ class MainWindow(QMainWindow):
                 )
 
     def _hide_banner(self) -> None:
-        self.banner.setVisible(False)
-        self.drive_banner.setVisible(False)
+        # Fade out quickly, then hide (no layout reflow because it's an overlay).
+        try:
+            if self._toast_anim is not None:
+                try:
+                    self._toast_anim.stop()
+                except Exception:
+                    pass
+            if self._toast_effect is not None:
+                anim = QVariantAnimation(self.banner)
+                anim.setDuration(120)
+                anim.setEasingCurve(QEasingCurve.OutCubic)
+
+                def _on_val(v) -> None:
+                    try:
+                        if self._toast_effect is not None:
+                            self._toast_effect.setOpacity(float(v))
+                        if self._toast_anchor is not None:
+                            # Slide up slightly while fading out.
+                            dy = int(round((1.0 - float(v)) * 6.0))
+                            if self._toast_overlay is not None:
+                                self._toast_overlay.move(int(self._toast_anchor.x()), int(self._toast_anchor.y() - dy))
+                    except Exception:
+                        pass
+
+                def _on_done() -> None:
+                    try:
+                        self.banner.setVisible(False)
+                    except Exception:
+                        pass
+                    try:
+                        if self._toast_overlay is not None:
+                            self._toast_overlay.hide()
+                    except Exception:
+                        pass
+
+                anim.valueChanged.connect(_on_val)
+                anim.finished.connect(_on_done)
+                anim.setStartValue(
+                    float(getattr(self._toast_effect, "opacity", lambda: 1.0)() if self._toast_effect else 1.0)
+                )
+                anim.setEndValue(0.0)
+                anim.start()
+                self._toast_anim = anim
+            else:
+                self.banner.setVisible(False)
+                if self._toast_overlay is not None:
+                    self._toast_overlay.hide()
+        except Exception:
+            self.banner.setVisible(False)
+            try:
+                if self._toast_overlay is not None:
+                    self._toast_overlay.hide()
+            except Exception:
+                pass
+        try:
+            self.drive_banner.setVisible(False)
+            if getattr(self, "_drive_toast_overlay", None) is not None:
+                self._drive_toast_overlay.hide()
+        except Exception:
+            pass
         self._cancel_autoconnect()
 
     def _cancel_autoconnect(self) -> None:
@@ -2010,6 +2469,53 @@ class MainWindow(QMainWindow):
     def focus_log_filter(self) -> None:
         self.log_filter.setFocus()
         self.log_filter.selectAll()
+
+    def _set_system_log_collapsed(self, collapsed: bool) -> None:
+        """
+        Premium dashboard behavior: keep the system log as a collapsible drawer.
+        This avoids constant visual noise while keeping diagnostics one click away.
+        """
+        try:
+            sizes = self.left_splitter.sizes()
+        except Exception:
+            sizes = None
+        if not sizes or len(sizes) < 2:
+            return
+        top = max(1, int(sizes[0]))
+        bottom = max(0, int(sizes[1]))
+        if collapsed:
+            self.left_splitter.setSizes([top, 0])
+            try:
+                if getattr(self, "btn_collapse_log", None) is not None:
+                    self.btn_collapse_log.setText(UI.log_collapse_glyph_collapsed)
+            except Exception:
+                pass
+        else:
+            # Expand to a sane default if it was fully collapsed.
+            if bottom <= 1:
+                bottom = max(160, int(round(top * 0.45)))
+            self.left_splitter.setSizes([top, bottom])
+            try:
+                if getattr(self, "btn_collapse_log", None) is not None:
+                    self.btn_collapse_log.setText(UI.log_collapse_glyph_expanded)
+            except Exception:
+                pass
+
+    def toggle_system_log_collapsed(self) -> None:
+        try:
+            sizes = self.left_splitter.sizes()
+        except Exception:
+            return
+        if not sizes or len(sizes) < 2:
+            return
+        collapsed = int(sizes[1]) <= 1
+        want = not collapsed
+        self._set_system_log_collapsed(want)
+        try:
+            if self.settings is not None:
+                self.settings.setValue("ui/log_collapsed", 1 if want else 0)
+        except Exception:
+            pass
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # Exit app confirmation.
@@ -2124,6 +2630,9 @@ class MainWindow(QMainWindow):
         def on_frame(frame: VideoFrame) -> None:
             # Called from GI thread context -> marshal to Qt thread.
             def _apply() -> None:
+                # Zero-noise shutdown: ignore frames in flight during close.
+                if bool(getattr(self, "_closing", False)):
+                    return
                 img = QImage(frame.rgb_bytes, frame.width, frame.height, QImage.Format_BGRA8888).copy()
                 base = QPixmap.fromImage(img)
                 self._last_video_pixmap = base
@@ -2299,20 +2808,12 @@ class MainWindow(QMainWindow):
             except Exception:
                 risky = True
 
-            box = QMessageBox(self)
-            # Keep visual chrome consistent with the app (frameless).
+            ok = False
             try:
-                box.setWindowFlag(Qt.FramelessWindowHint, True)
+                ok = bool(self._confirm_exit_overlay(risky=risky))
             except Exception:
-                pass
-            box.setIcon(QMessageBox.Icon.Warning)
-            box.setWindowTitle(UI.exit_confirm_title)
-            box.setText(UI.exit_confirm_body if risky else UI.exit_confirm_body_idle)
-            btn_exit = box.addButton(UI.exit_confirm_exit, QMessageBox.ButtonRole.AcceptRole)
-            box.addButton(UI.exit_confirm_cancel, QMessageBox.ButtonRole.RejectRole)
-            box.setDefaultButton(btn_exit)
-            box.exec()
-            if box.clickedButton() is not btn_exit:
+                ok = False
+            if not ok:
                 event.ignore()
                 return
             self._closing = True
@@ -2398,6 +2899,238 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         super().closeEvent(event)
+
+    def _confirm_exit_overlay(self, *, risky: bool) -> bool:
+        """
+        Premium confirm modal:
+        - Obsidian overlay + centered card (high contrast)
+        - Avoids QMessageBox styling differences across platforms
+        """
+        # Lazily build (reused across invocations).
+        if self._exit_confirm_overlay is None:
+
+            class _Overlay(QWidget):
+                def __init__(self, parent, on_cancel):
+                    super().__init__(parent)
+                    self._on_cancel = on_cancel
+
+                def mousePressEvent(self, _event) -> None:
+                    try:
+                        self._on_cancel()
+                    except Exception:
+                        pass
+
+                def keyPressEvent(self, e) -> None:
+                    try:
+                        if e.key() == Qt.Key_Escape:
+                            self._on_cancel()
+                            e.accept()
+                            return
+                        if e.key() in (Qt.Key_Return, Qt.Key_Enter) and e.modifiers() == Qt.NoModifier:
+                            fw = self.focusWidget()
+                            if isinstance(fw, QPushButton) and fw.isEnabled():
+                                try:
+                                    fw.click()
+                                    e.accept()
+                                    return
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+                    super().keyPressEvent(e)
+
+            overlay = _Overlay(self, on_cancel=lambda: None)
+            overlay.setObjectName("modalOverlay")
+            overlay.setFocusPolicy(Qt.StrongFocus)
+            try:
+                eff = QGraphicsOpacityEffect(overlay)
+                eff.setOpacity(0.0)
+                overlay.setGraphicsEffect(eff)
+                self._exit_confirm_effect = eff
+            except Exception:
+                self._exit_confirm_effect = None
+
+            card = QWidget(overlay)
+            card.setObjectName("modalCard")
+            card.setFixedWidth(520)
+            card_l = QVBoxLayout(card)
+            card_l.setContentsMargins(18, 16, 18, 16)
+            card_l.setSpacing(12)
+
+            top = QWidget(card)
+            top_l = QHBoxLayout(top)
+            top_l.setContentsMargins(0, 0, 0, 0)
+            top_l.setSpacing(12)
+
+            icon = QLabel(top)
+            try:
+                pm = self.style().standardIcon(QStyle.SP_MessageBoxWarning).pixmap(28, 28)
+                icon.setPixmap(pm)
+            except Exception:
+                pass
+            top_l.addWidget(icon, 0, alignment=Qt.AlignTop)
+
+            txt_col = QWidget(top)
+            txt_l = QVBoxLayout(txt_col)
+            txt_l.setContentsMargins(0, 0, 0, 0)
+            txt_l.setSpacing(6)
+
+            title = QLabel(UI.exit_confirm_title, txt_col)
+            title.setObjectName("modalTitle")
+            txt_l.addWidget(title)
+
+            body = QLabel("", txt_col)
+            body.setObjectName("modalBody")
+            body.setWordWrap(True)
+            txt_l.addWidget(body)
+
+            top_l.addWidget(txt_col, 1)
+            card_l.addWidget(top)
+
+            btn_row = QWidget(card)
+            btn_l = QHBoxLayout(btn_row)
+            btn_l.setContentsMargins(0, 0, 0, 0)
+            btn_l.setSpacing(10)
+            btn_l.addStretch(1)
+
+            btn_cancel = QPushButton(UI.exit_confirm_cancel, btn_row)
+            btn_cancel.setObjectName("secondaryButton")
+            btn_l.addWidget(btn_cancel)
+
+            btn_exit = QPushButton(UI.exit_confirm_exit, btn_row)
+            btn_exit.setObjectName("dangerButton")
+            btn_l.addWidget(btn_exit)
+
+            card_l.addWidget(btn_row)
+
+            self._exit_confirm_overlay = overlay
+            self._exit_confirm_card = card
+            self._exit_confirm_title = title
+            self._exit_confirm_body = body
+            self._exit_confirm_btn_cancel = btn_cancel
+            self._exit_confirm_btn_exit = btn_exit
+
+            # Connect once; per-invocation behavior is bound via `self._exit_confirm_finish`.
+            def _on_cancel_clicked() -> None:
+                try:
+                    f = self._exit_confirm_finish
+                    if f is not None:
+                        f(False)
+                except Exception:
+                    pass
+
+            def _on_exit_clicked() -> None:
+                try:
+                    f = self._exit_confirm_finish
+                    if f is not None:
+                        f(True)
+                except Exception:
+                    pass
+
+            try:
+                btn_cancel.clicked.connect(_on_cancel_clicked)
+            except Exception:
+                pass
+            try:
+                btn_exit.clicked.connect(_on_exit_clicked)
+            except Exception:
+                pass
+
+        overlay = self._exit_confirm_overlay
+        card = self._exit_confirm_card
+        if overlay is None or card is None:
+            return False
+
+        # Update copy for this invocation (and current language).
+        body_text = UI.exit_confirm_body if risky else UI.exit_confirm_body_idle
+        try:
+            if self._exit_confirm_title is not None:
+                self._exit_confirm_title.setText(UI.exit_confirm_title)
+            if self._exit_confirm_body is not None:
+                self._exit_confirm_body.setText(body_text)
+            if self._exit_confirm_btn_cancel is not None:
+                self._exit_confirm_btn_cancel.setText(UI.exit_confirm_cancel)
+            if self._exit_confirm_btn_exit is not None:
+                self._exit_confirm_btn_exit.setText(UI.exit_confirm_exit)
+        except Exception:
+            pass
+        # Premium: add salience based on risk state (QSS-driven).
+        try:
+            card.setProperty("risk", bool(risky))
+            card.style().unpolish(card)
+            card.style().polish(card)
+        except Exception:
+            pass
+
+        # Show + block using a local event loop.
+        result = {"ok": False}
+        loop = QEventLoop(self)
+
+        def _finish(v: bool) -> None:
+            result["ok"] = bool(v)
+            try:
+                loop.quit()
+            except Exception:
+                pass
+
+        try:
+            overlay._on_cancel = lambda: _finish(False)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        # Bind per-invocation finish callback (signals are connected once at creation).
+        self._exit_confirm_finish = _finish
+
+        overlay.setGeometry(0, 0, self.width(), self.height())
+        card.adjustSize()
+        self._recenter_exit_confirm_card()
+        overlay.show()
+        overlay.raise_()
+        overlay.activateWindow()
+        # Default focus: safer for risky exits.
+        try:
+            want = self._exit_confirm_btn_cancel if risky else self._exit_confirm_btn_exit
+            if want is not None:
+                want.setDefault(True)
+                want.setAutoDefault(True)
+                want.setFocus()
+            else:
+                overlay.setFocus()
+        except Exception:
+            overlay.setFocus()
+
+        # Fade-in (cinematic, subtle).
+        try:
+            eff = self._exit_confirm_effect
+            if eff is not None:
+                eff.setOpacity(0.0)
+                if self._exit_confirm_anim is not None:
+                    try:
+                        self._exit_confirm_anim.stop()
+                    except Exception:
+                        pass
+                anim = QVariantAnimation(overlay)
+                anim.setDuration(140)
+                anim.setEasingCurve(QEasingCurve.OutCubic)
+
+                def _on_val(v) -> None:
+                    try:
+                        if self._exit_confirm_effect is not None:
+                            self._exit_confirm_effect.setOpacity(float(v))
+                    except Exception:
+                        pass
+
+                anim.valueChanged.connect(_on_val)
+                anim.setStartValue(0.0)
+                anim.setEndValue(1.0)
+                anim.start()
+                self._exit_confirm_anim = anim
+        except Exception:
+            pass
+
+        loop.exec()
+        overlay.hide()
+        return bool(result["ok"])
 
     def _restore_left_splitter_sizes(self) -> None:
         if self.settings is None:
@@ -2493,19 +3226,29 @@ class MainWindow(QMainWindow):
 
         # Telemetry flood guard: coalesce to the latest payload per tick.
         last_telemetry_payload: dict | None = None
+        # Log burst coalescing: batch into a single LogPanel update per tick.
+        batched_logs: list[tuple[str, str]] = []
         for ev in drained:
             match ev:
                 case StatusEvent(summary=summary, detail=detail, phase=phase):
-                    if summary:
-                        self.session_label.setText(f"{UI.session_status_prefix}{summary}")
-                    self.detail_label.setText(detail)
-                    if phase is not None:
+                    # Avoid duplicated scan messaging: scanning state is already communicated via
+                    # the header badge + toast + left hint. Keep reserved space but clear text.
+                    if phase == AppPhase.SCANNING:
                         try:
-                            self.phase = phase
+                            self.session_label.setText("")
                         except Exception:
                             pass
                         try:
-                            self._apply_primary_state_badge(phase)
+                            self.detail_label.setText("")
+                        except Exception:
+                            pass
+                    else:
+                        if summary:
+                            self.session_label.setText(f"{UI.session_status_prefix}{summary}")
+                        self.detail_label.setText(detail)
+                    if phase is not None:
+                        try:
+                            self.phase = phase
                         except Exception:
                             pass
                         # Derive UI booleans from phase (single source of truth).
@@ -2516,15 +3259,23 @@ class MainWindow(QMainWindow):
                         )
                         self.is_scanning = bool(is_scanning)
                         self.is_connecting = bool(is_connecting)
+                        did_conn_transition = False
                         if should_set_connected:
-                            self.set_connection_state(True)
+                            did_conn_transition = True
+                            self.set_connection_state(True)  # calls _render_state()
                         if should_set_disconnected:
-                            self.set_connection_state(False)
+                            did_conn_transition = True
+                            self.set_connection_state(False)  # calls _render_state()
+                        # Single render entrypoint for all state surfaces.
+                        if not did_conn_transition:
+                            self._render_state()
+                    else:
+                        self._render_state()
                 case TelemetryEvent(payload=payload):
                     if isinstance(payload, dict):
                         last_telemetry_payload = payload
                 case LogEvent(level=level, message=message):
-                    self.append_log(str(level), str(message))
+                    batched_logs.append((str(level), str(message)))
                 case CarsEvent(cars=cars):
                     self.cars = list(cars) if isinstance(cars, list) else []
                     self.apply_car_filter()
@@ -2533,9 +3284,8 @@ class MainWindow(QMainWindow):
                             self.list.setFocus()
                         except Exception:
                             pass
-                    self._update_left_hint()
+                    self._render_state()
                     if self.cars:
-                        self.append_log("INFO", UI.scan_complete_found.format(count=len(self.cars)))
                         if (
                             len(self.cars) == 1
                             and bool(getattr(self.cfg, "auto_connect_single", True))
@@ -2545,18 +3295,34 @@ class MainWindow(QMainWindow):
                             self.selected_index = 0
                             self._schedule_autoconnect(self.cars[0])
                     else:
-                        self.append_log("WARN", UI.scan_complete_none)
+                        pass
                 case ScanDoneEvent():
+                    was_scanning = bool(self.is_scanning)
                     self.is_scanning = False
                     if not self.is_connected and not self.is_connecting:
-                        self._apply_primary_state_badge(AppPhase.IDLE)
+                        try:
+                            self.phase = AppPhase.IDLE
+                        except Exception:
+                            pass
                     # If we were only scanning (not connected), ensure the session label
                     # returns to a stable idle state instead of staying on "Scanning…".
                     if not self.is_connected and not self.is_connecting:
                         self.session_label.setText(f"{UI.session_status_prefix}{UI.badge_disconnected}")
                         self.detail_label.setText("")
-                    self._update_left_hint()
-                    self._update_controls()
+                    self._render_state()
+                    # UX: scan completion toast (no layout shift).
+                    # Guard against duplicate ScanDoneEvent emissions.
+                    if was_scanning:
+                        try:
+                            n = int(len(self.cars or []))
+                        except Exception:
+                            n = 0
+                        if n > 0:
+                            self._show_banner("ok", UI.toast_scan_found.format(count=n), auto_hide_ms=2600)
+                            self.append_log("INFO", UI.toast_scan_found.format(count=n))
+                        else:
+                            self._show_banner("warn", UI.toast_scan_none, auto_hide_ms=2600)
+                            self.append_log("WARN", UI.toast_scan_none)
                 case ErrorEvent(message=message):
                     self.append_log("ERROR", str(message))
                     self._show_banner("danger", f"{UI.error_prefix}{message}", auto_hide_ms=8000)
@@ -2576,10 +3342,21 @@ class MainWindow(QMainWindow):
                     self.active_car_id = None
                     self._refresh_car_row_active_styles()
                     self.is_connecting = False
-                    self._update_controls()
+                    self._render_state()
                 case _:
                     # Unknown event: ignore for forward-compat.
                     pass
+
+        if batched_logs:
+            try:
+                self._log_panel.append_logs(batched_logs)
+            except Exception:
+                # Fallback: preserve logs even if batch append fails.
+                for lvl, msg in batched_logs:
+                    try:
+                        self.append_log(str(lvl), str(msg))
+                    except Exception:
+                        pass
 
         if last_telemetry_payload is not None:
             payload = last_telemetry_payload
@@ -2591,6 +3368,10 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
             self._update_debug_telemetry(payload)
+        try:
+            self._update_time_badge()
+        except Exception:
+            pass
 
     def _set_badge_kind(self, badge: QLabel, kind: str) -> None:
         did_change = False
@@ -2613,10 +3394,128 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
+            self._position_toast_overlay()
+        except Exception:
+            pass
+        try:
+            self._position_drive_toast_overlay()
+        except Exception:
+            pass
+        try:
+            if self._exit_confirm_overlay is not None and self._exit_confirm_overlay.isVisible():
+                self._exit_confirm_overlay.setGeometry(0, 0, self.width(), self.height())
+                self._recenter_exit_confirm_card()
+        except Exception:
+            pass
+        try:
+            self._apply_header_responsive_compaction()
+        except Exception:
+            pass
+        try:
             self._resize_video_pixmap()
         except Exception:
             pass
         super().resizeEvent(event)
+
+    def _position_drive_toast_overlay(self) -> None:
+        overlay = getattr(self, "_drive_toast_overlay", None)
+        if overlay is None:
+            return
+        if getattr(self, "drive_banner", None) is None:
+            return
+        if not self.drive_banner.isVisible():
+            return
+        parent = overlay.parentWidget() or self.video_container
+
+        self.drive_banner.adjustSize()
+        w = int(self.drive_banner.width())
+        h = int(self.drive_banner.height())
+        x = max(12, int((int(parent.width()) - w) / 2))
+        y = max(12, int(int(parent.height()) - h - 12))
+        try:
+            overlay.setGeometry(int(x), int(y), int(w), int(h))
+        except Exception:
+            pass
+        self.drive_banner.move(0, 0)
+        try:
+            overlay.raise_()
+            self.drive_banner.raise_()
+        except Exception:
+            pass
+
+    def _position_toast_overlay(self) -> None:
+        overlay = self._toast_overlay
+        if overlay is None:
+            return
+        parent = overlay.parentWidget() or self
+        if getattr(self, "banner", None) is None:
+            return
+        if not self.banner.isVisible():
+            return
+        # Compute anchor under the header (global -> window coords).
+        y = 12
+        try:
+            # QMainWindow has an internal coordinate stack; use global mapping for correctness.
+            p_global = self.header_widget.mapToGlobal(QPoint(0, int(self.header_widget.height())))
+            p = parent.mapFromGlobal(p_global)
+            y = int(p.y()) + 8
+        except Exception:
+            y = 12
+
+        max_w = max(320, int(self.width()) - 24)
+        card_w = min(760, max_w)
+        try:
+            self.banner.setFixedWidth(int(card_w))
+        except Exception:
+            pass
+        self.banner.adjustSize()
+        try:
+            w = int(parent.width())
+        except Exception:
+            w = int(self.width())
+        x = max(12, int((w - self.banner.width()) / 2))
+        self._toast_anchor = QPoint(int(x), int(y))
+        # Keep overlay minimal so it never blocks the app outside the toast.
+        try:
+            overlay.setGeometry(int(x), int(y), int(self.banner.width()), int(self.banner.height()))
+        except Exception:
+            pass
+        self.banner.move(0, 0)
+        try:
+            overlay.raise_()
+            self.banner.raise_()
+        except Exception:
+            pass
+
+    def _recenter_exit_confirm_card(self) -> None:
+        card = self._exit_confirm_card
+        overlay = self._exit_confirm_overlay
+        if card is None or overlay is None:
+            return
+        try:
+            x = max(0, int((overlay.width() - card.width()) / 2))
+            y = max(0, int((overlay.height() - card.height()) / 2))
+            card.move(int(x), int(y))
+        except Exception:
+            pass
+
+    def _apply_header_responsive_compaction(self) -> None:
+        """
+        Senior UX: keep right-side actions stable under narrow widths.
+
+        Compaction policy (in order):
+        - Hide video badge first
+        - Then hide time badge
+        """
+        w = int(self.width() or 0)
+        # Tuned for the current title + buttons set. Prefer conservative thresholds.
+        hide_video = w < 980
+        hide_time = w < 860
+
+        if getattr(self, "badge_video", None) is not None:
+            self.badge_video.setVisible(not hide_video)
+        if getattr(self, "badge_time", None) is not None:
+            self.badge_time.setVisible(not hide_time)
 
     def _set_pulse(self, widget: QWidget, on: bool) -> None:
         want = bool(on)
@@ -2635,12 +3534,39 @@ class MainWindow(QMainWindow):
                 self._set_pulse(self.badge_conn, False)
             except Exception:
                 pass
+            try:
+                self._set_skeleton_pulse(False)
+            except Exception:
+                pass
             if self._pulse_timer is not None and self._pulse_timer.isActive():
                 self._pulse_timer.stop()
             return
 
         if self._pulse_timer is not None and not self._pulse_timer.isActive():
             self._pulse_timer.start()
+
+    def _set_skeleton_pulse(self, on: bool) -> None:
+        """
+        Premium: animate scan skeleton rows without reflow.
+        """
+        try:
+            if not bool(self.is_scanning) or bool(self.cars):
+                return
+        except Exception:
+            return
+        try:
+            for i in range(self.list.count()):
+                item = self.list.item(i)
+                if item is None:
+                    continue
+                row = self.list.itemWidget(item)
+                if row is None or (not bool(row.property("skeleton"))):
+                    continue
+                for lab in row.findChildren(QLabel):
+                    if bool(lab.property("skeletonBar")):
+                        self._set_pulse(lab, bool(on))
+        except Exception:
+            return
 
     def _on_pulse_tick(self) -> None:
         if not (self.is_scanning or self.is_connecting):
@@ -2650,6 +3576,10 @@ class MainWindow(QMainWindow):
         try:
             self._set_pulse(self.mid_state, self._pulse_on)
             self._set_pulse(self.badge_conn, self._pulse_on)
+        except Exception:
+            pass
+        try:
+            self._set_skeleton_pulse(self._pulse_on)
         except Exception:
             pass
 

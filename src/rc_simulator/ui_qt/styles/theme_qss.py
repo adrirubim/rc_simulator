@@ -240,6 +240,99 @@ QLineEdit:hover {
   border: 1px solid @BORDER_HOVER@;
 }
 
+QComboBox, QSpinBox {
+  background: @SURFACE@;
+  border: 1px solid @BORDER@;
+  border-radius: @RADIUS_MD@;
+  padding: @PAD_MD@;
+  min-height: @BTN_MIN_H@;
+}
+QComboBox:hover, QSpinBox:hover {
+  border: 1px solid @BORDER_HOVER@;
+  background: @SURFACE_STRONG@;
+}
+QComboBox:focus, QSpinBox:focus {
+  border: 1px solid @ACCENT_65@;
+}
+QComboBox::drop-down {
+  border: none;
+  width: 28px;
+}
+QComboBox::down-arrow {
+  image: none;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid @MUTED@;
+  margin-right: 10px;
+}
+QComboBox::down-arrow:hover {
+  border-top: 6px solid @TEXT@;
+}
+QComboBox QAbstractItemView {
+  background: @MENU_BG@;
+  border: 1px solid @BORDER@;
+  border-radius: @RADIUS_LG@;
+  padding: 6px;
+  outline: none;
+  selection-background-color: @ACCENT_16@;
+}
+QComboBox QAbstractItemView::item {
+  padding: 8px 10px;
+  border-radius: @RADIUS_MD@;
+}
+QComboBox QAbstractItemView::item:selected {
+  background: @ACCENT_22@;
+}
+
+QSpinBox::up-button, QSpinBox::down-button {
+  subcontrol-origin: border;
+  width: 24px;
+  border: none;
+  background: transparent;
+}
+QSpinBox::up-arrow, QSpinBox::down-arrow {
+  image: none;
+  width: 0px;
+  height: 0px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+QSpinBox::up-arrow {
+  border-bottom: 6px solid @MUTED@;
+}
+QSpinBox::down-arrow {
+  border-top: 6px solid @MUTED@;
+}
+QSpinBox::up-arrow:hover {
+  border-bottom: 6px solid @TEXT@;
+}
+QSpinBox::down-arrow:hover {
+  border-top: 6px solid @TEXT@;
+}
+
+QCheckBox {
+  spacing: 10px;
+  color: @TEXT@;
+}
+QCheckBox::indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid @BORDER@;
+  background: @SURFACE@;
+}
+QCheckBox::indicator:hover {
+  border: 1px solid @BORDER_HOVER@;
+  background: @SURFACE_STRONG@;
+}
+QCheckBox::indicator:checked {
+  border: 1px solid @ACCENT_BORDER@;
+  background: @ACCENT_22@;
+}
+QCheckBox::indicator:checked:hover {
+  background: @ACCENT_35@;
+}
+
 QTextEdit {
   background: @SURFACE_WEAK@;
   border: 1px solid @BORDER@;
@@ -406,6 +499,26 @@ QPushButton#bannerClose:pressed {
   border: 1px solid @BORDER_PRESSED@;
 }
 
+QToolButton#logCollapse {
+  background: transparent;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: @RADIUS_MD@;
+  padding: 4px 8px;
+  min-width: 26px;
+  min-height: 26px;
+  font-weight: 900;
+  color: @MUTED@;
+}
+QToolButton#logCollapse:hover {
+  background: @FILL_HOVER@;
+  border: 1px solid @BORDER_HOVER@;
+  color: @TEXT@;
+}
+QToolButton#logCollapse:pressed {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_PRESSED@;
+}
+
 /* ---------- Language selector (3 circular dots) ---------- */
 QToolButton#langDot {
   background: @SURFACE_WEAK@;
@@ -457,6 +570,10 @@ QWidget#carRow {
   background: @SURFACE_STRONG@;
   border: 1px solid @BORDER_DIMMER@;
 }
+QWidget#carRow[skeleton="true"] {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_DIM@;
+}
 QWidget#carRow:hover {
   background: @SURFACE_STRONG@;
   border: 1px solid @ACCENT_22@;
@@ -498,6 +615,34 @@ QDockWidget::widget {
   background: @SURFACE@;
 }
 
+/* Splitters: subtle handle, modern */
+QSplitter::handle {
+  background: transparent;
+}
+QSplitter::handle:hover {
+  background: @BORDER_DIMMER@;
+}
+QSplitter::handle:pressed {
+  background: @ACCENT_22@;
+}
+QSplitter::handle:vertical {
+  height: 8px;
+  margin: 6px 0px;
+  border-radius: 6px;
+}
+QSplitter::handle:horizontal {
+  width: 8px;
+  margin: 0px 6px;
+  border-radius: 6px;
+}
+
+/* System log panel container */
+QWidget#systemLogPanel {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: @RADIUS_LG@;
+}
+
 /* ---------- Labels ---------- */
 QLabel#title {
   font-size: @FONT_TITLE@;
@@ -534,6 +679,24 @@ QLabel#carTitle {
   font-size: @FONT_LABEL@;
   font-weight: 800;
 }
+
+/* Skeleton bars (premium placeholders) */
+QLabel[skeletonBar="true"] {
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 7px;
+  min-height: 14px;
+}
+QLabel[skeletonBar="true"][pulse="true"] {
+  background: rgba(148, 163, 184, 0.22);
+}
+QLabel[skeletonBar="true"][skeletonSmall="true"] {
+  background: rgba(148, 163, 184, 0.10);
+  min-height: 10px;
+  max-width: 60%;
+}
+QLabel[skeletonBar="true"][skeletonSmall="true"][pulse="true"] {
+  background: rgba(148, 163, 184, 0.16);
+}
 QLabel#logText {
   color: @TEXT@;
   font-family: "Cascadia Mono", "Consolas";
@@ -561,6 +724,10 @@ QLabel#logText {
 #banner[bannerKind="muted"] {
   border: 1px solid @BORDER@;
   background: @MUTED_FILL@;
+}
+#banner[bannerKind="accent"] {
+  border: 1px solid @ACCENT_BORDER@;
+  background: @ACCENT_FILL@;
 }
 
 /* ---------- Badges (chips) ---------- */
@@ -637,6 +804,33 @@ QWidget#fadeOverlay {
   background: rgba(15, 23, 42, 255);
   border: none;
 }
+
+/* ---------- Modal overlay (confirm exit, etc.) ---------- */
+QWidget#modalOverlay {
+  background: @OVERLAY_BG@;
+  border: none;
+}
+QWidget#modalCard {
+  background: @MENU_BG@;
+  border: 1px solid @BORDER@;
+  border-radius: @RADIUS_LG@;
+}
+QWidget#modalCard[risk="true"] {
+  /* High-salience confirm: danger accent without screaming */
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(11, 18, 32, 0.92);
+}
+QWidget#modalCard[risk="false"] {
+  border: 1px solid rgba(96, 165, 250, 0.45);
+}
+QLabel#modalTitle {
+  font-size: @FONT_H2@;
+  font-weight: 900;
+  color: @TEXT_STRONG@;
+}
+QLabel#modalBody {
+  color: @TEXT@;
+}
 QLabel#videoOverlayTitle {
   font-size: @FONT_LABEL@;
   font-weight: 800;
@@ -662,12 +856,19 @@ QProgressBar {
   border-radius: @RADIUS_MD@;
   height: 10px;
 }
+QProgressBar[busy="false"] {
+  background: transparent;
+  border: none;
+}
 QProgressBar::chunk {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
     stop:0 rgba(147, 197, 253, 0.85),
     stop:1 @ACCENT_70@
   );
   border-radius: @RADIUS_MD@;
+}
+QProgressBar[busy="false"]::chunk {
+  background: transparent;
 }
 
 /* ---------- Splash ---------- */
@@ -713,7 +914,7 @@ QProgressBar[barKind="steer"]::chunk {
 QScrollBar:vertical {
   background: transparent;
   width: 10px;
-  margin: 2px 2px 2px 2px;
+  margin: 2px;
 }
 QScrollBar::handle:vertical {
   background: @SCROLLBAR_HANDLE@;
@@ -728,6 +929,42 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
   background: transparent;
+}
+
+QScrollBar:horizontal {
+  background: transparent;
+  height: 10px;
+  margin: 2px;
+}
+QScrollBar::handle:horizontal {
+  background: @SCROLLBAR_HANDLE@;
+  border-radius: @RADIUS_MD@;
+  min-width: 20px;
+}
+QScrollBar::handle:horizontal:hover {
+  background: @SCROLLBAR_HANDLE_HOVER@;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+  width: 0px;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+  background: transparent;
+}
+
+/* Premium: keep scrollbars subtle until hover */
+QAbstractScrollArea::corner {
+  background: transparent;
+}
+
+/* ---------- Cards (premium surfaces) ---------- */
+QWidget[card="true"] {
+  background: @SURFACE_WEAK@;
+  border: 1px solid @BORDER_DIM@;
+  border-radius: @RADIUS_LG@;
+}
+QWidget[card="true"]:hover {
+  border: 1px solid @BORDER_HOVER@;
+  background: @SURFACE@;
 }
 """
 

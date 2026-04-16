@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import queue
 import threading
 from dataclasses import dataclass
 
 from ..core.control_config import ControlConfig
-from ..core.events import CarsEvent, LogEvent, ScanDoneEvent, StatusEvent, UiEvent
+from ..core.events import CarsEvent, ScanDoneEvent, StatusEvent, UiEvent
 from ..core.models import Car
 from ..core.queue_utils import put_with_backpressure
 from ..core.state import AppPhase
@@ -16,7 +17,13 @@ from ..services import discover_cars, drive_worker
 @dataclass(slots=True)
 class SessionController:
     """
-    Owns background threads and publishes UiEvent to a queue.
+    Owns background threads and publishes UiEvent to a bounded queue.
+
+    Key properties (Gold Master):
+    - Two independent stop events: scan cancellation is isolated from drive sessions.
+    - Deterministic shutdown: signals both stop events and synchronously joins non-daemon threads.
+    - Backpressure-aware event publishing: drops/coalesces low-priority bursts while preserving
+      state transitions (see `allow_drop` usage and `events_drop_oldest` counters).
 
     UI should call start_scan/connect/disconnect and drain `events`.
     """
@@ -29,14 +36,35 @@ class SessionController:
     control_cfg: ControlConfig = ControlConfig()
     events_dropped: int = 0
     events_drop_oldest: int = 0
+    _warned_hp_drop_oldest: bool = False
 
     def _put_event(self, ev: UiEvent, *, allow_drop: bool) -> None:
+        def _on_drop() -> None:
+            self.events_dropped = int(self.events_dropped) + 1
+
+        def _on_drop_oldest() -> None:
+            # High-priority saturation signal: we had to drop an older event to make room.
+            # Emit a single internal warning so we can track pathological queue pressure.
+            if (not allow_drop) and (not bool(getattr(self, "_warned_hp_drop_oldest", False))):
+                try:
+                    logging.warning(
+                        "UI event queue saturated: dropped oldest to enqueue high-priority event. "
+                        "Consider increasing RC_EVENT_QUEUE_MAX or reducing event volume."
+                    )
+                except Exception:
+                    pass
+                try:
+                    self._warned_hp_drop_oldest = True
+                except Exception:
+                    pass
+            self.events_drop_oldest = int(self.events_drop_oldest) + 1
+
         put_with_backpressure(
             self.events,
             ev,
             allow_drop=allow_drop,
-            on_drop=lambda: setattr(self, "events_dropped", int(self.events_dropped) + 1),
-            on_drop_oldest=lambda: setattr(self, "events_drop_oldest", int(self.events_drop_oldest) + 1),
+            on_drop=_on_drop,
+            on_drop_oldest=_on_drop_oldest,
         )
 
     @classmethod
@@ -85,10 +113,6 @@ class SessionController:
     def _scan_worker(self, stop_event: threading.Event) -> None:
         try:
             self._put_event(StatusEvent(summary="Scanning…", detail="", phase=AppPhase.SCANNING), allow_drop=False)
-            self._put_event(
-                LogEvent(level="INFO", message="Searching for RC cars on the network…"),
-                allow_drop=True,
-            )
 
             cars_dict = discover_cars(timeout_s=3.0, stop_event=stop_event)
             cars = list(cars_dict.values())

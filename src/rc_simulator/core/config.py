@@ -18,6 +18,7 @@ class QtUiConfig:
     auto_scan: bool = os.getenv("RC_UI_AUTO_SCAN", "1") in ("1", "true", "True")
     auto_connect_single: bool = os.getenv("RC_UI_AUTO_CONNECT_SINGLE", "1") in ("1", "true", "True")
     auto_connect_delay_ms: int = int(os.getenv("RC_UI_AUTO_CONNECT_DELAY_MS", "1200"))
+    start_fullscreen: bool = os.getenv("RC_UI_START_FULLSCREEN", "0") in ("1", "true", "True")
 
     # Control session (MOZA / evdev)
     moza_dev_path: str = os.getenv(

@@ -29,7 +29,7 @@ def build_banner(*, parent: QWidget, on_close: Callable[[], None]) -> Banner:
     text.setWordWrap(True)
     layout.addWidget(text, 1)
 
-    close = QPushButton("✕", banner)
+    close = QPushButton(UI.window_close_glyph, banner)
     close.setObjectName("bannerClose")
     close.clicked.connect(on_close)
     close.setAccessibleName(UI.banner_dismiss_name)

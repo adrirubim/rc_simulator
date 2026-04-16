@@ -111,7 +111,23 @@ class SessionPanel:
         self.btn_connect.setText(UI.connect_button_connecting if is_connecting else UI.connect_button)
         self.btn_disconnect.setText(UI.disconnect_button)
 
-        self.phase_progress.setVisible(bool(is_scanning or is_connecting))
+        # Keep layout stable: don't toggle visibility (it shifts the video block).
+        # Instead, switch between "busy" indeterminate and "idle" empty state.
+        busy_progress = bool(is_scanning or is_connecting)
+        try:
+            if self.phase_progress.property("busy") != busy_progress:
+                self.phase_progress.setProperty("busy", busy_progress)
+                self.phase_progress.style().unpolish(self.phase_progress)
+                self.phase_progress.style().polish(self.phase_progress)
+            if busy_progress:
+                # Indeterminate.
+                self.phase_progress.setRange(0, 0)
+            else:
+                # Empty but visible.
+                self.phase_progress.setRange(0, 1)
+                self.phase_progress.setValue(0)
+        except Exception:
+            pass
         self.refresh_video_overlay()
 
     def refresh_mid_state(
@@ -127,9 +143,9 @@ class SessionPanel:
         # Only show a mid-state card for transient busy states (scan/connect),
         # not for empty/idle selection guidance (which lives in the left panel).
         if is_scanning:
-            self.mid_state_title.setText(UI.mid_state_scanning_title)
-            self.mid_state_body.setText(UI.mid_state_scanning_body)
-            self.mid_state.setVisible(True)
+            # Avoid duplicate scan messaging: scanning is already shown via header badge,
+            # left hint, and a toast. Keep the center focused on the video overlay.
+            self.mid_state.setVisible(False)
             return
 
         if is_connecting:

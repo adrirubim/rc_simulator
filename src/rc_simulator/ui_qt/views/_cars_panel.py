@@ -16,6 +16,7 @@ class CarsPanel:
     search: QLineEdit
     list_widget: QListWidget
     list_hint: QLabel
+    get_is_scanning: Callable[[], bool]
     get_cars: Callable[[], list[Car]]
     get_active_car_id: Callable[[], str | None]
     set_filtered_indices: Callable[[list[int]], None]
@@ -79,6 +80,45 @@ class CarsPanel:
         self.list_widget.clear()
         filtered_indices: list[int] = []
         preferred_row: int | None = None
+
+        # Premium UX: while scanning and before results arrive, show skeleton rows instead of
+        # an empty list that flickers as scan state toggles.
+        try:
+            scanning = bool(self.get_is_scanning())
+        except Exception:
+            scanning = False
+        if scanning and (not cars):
+            for _i in range(6):
+                item = QListWidgetItem(self.list_widget)
+                row = QWidget(self.list_widget)
+                row.setObjectName("carRow")
+                row.setProperty("skeleton", True)
+                rl = QVBoxLayout(row)
+                density = str(getattr(self.cfg, "density", "comfortable"))
+                if density == "compact":
+                    rl.setContentsMargins(8, 6, 8, 6)
+                else:
+                    rl.setContentsMargins(10, 8, 10, 8)
+                rl.setSpacing(6)
+                bar1 = QLabel("", row)
+                bar1.setProperty("skeletonBar", True)
+                bar2 = QLabel("", row)
+                bar2.setProperty("skeletonBar", True)
+                bar2.setProperty("skeletonSmall", True)
+                rl.addWidget(bar1)
+                rl.addWidget(bar2)
+                item.setSizeHint(row.sizeHint())
+                self.list_widget.addItem(item)
+                self.list_widget.setItemWidget(item, row)
+
+            self.set_filtered_indices([])
+            self.set_selected_index(None)
+            try:
+                self.list_widget.clearSelection()
+            except Exception:
+                pass
+            self.on_after_filter_applied()
+            return
 
         for idx, car in enumerate(cars):
             hay = f"{car.name} {car.ip} {car.control_port}".lower()

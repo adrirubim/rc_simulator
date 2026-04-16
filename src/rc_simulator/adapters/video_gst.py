@@ -12,6 +12,9 @@ class GstVideoReceiver(VideoReceiver):
 
     - If GStreamer GI isn't available, start() returns False and reports via on_error.
     - This adapter is intentionally minimal; it is safe to import even without GI.
+    - Output format: frames are emitted as packed BGRA (BGRA8888) to match the UI's `QImage` path.
+    - Reliability: the GStreamer bus is monitored in a background thread; errors are suppressed
+      during shutdown to avoid noisy close behavior.
     """
 
     def __init__(

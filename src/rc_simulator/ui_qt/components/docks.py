@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -33,10 +34,12 @@ class LogDock:
 @dataclass(frozen=True)
 class LogPanel:
     widget: QWidget
+    title: QLabel
     filter: QLineEdit
     view: QPlainTextEdit
     pause_button: QPushButton
     clear_button: QPushButton
+    collapse_button: QToolButton
 
 
 def build_log_panel(
@@ -45,16 +48,30 @@ def build_log_panel(
     on_filter_changed: Callable[[], None],
     on_pause_toggled: Callable[[bool], None],
     on_clear_clicked: Callable[[], None],
+    on_toggle_collapsed: Callable[[], None],
 ) -> LogPanel:
     wrap = QWidget(parent)
     wrap.setObjectName("systemLogPanel")
+    wrap.setProperty("card", True)
     panel_l = QVBoxLayout(wrap)
     panel_l.setContentsMargins(0, 0, 0, 0)
     panel_l.setSpacing(8)
 
-    title = QLabel(UI.log_dock_title, wrap)
+    header = QWidget(wrap)
+    header_l = QHBoxLayout(header)
+    header_l.setContentsMargins(0, 0, 0, 0)
+    header_l.setSpacing(8)
+    title = QLabel(UI.log_dock_title, header)
     title.setObjectName("title")
-    panel_l.addWidget(title)
+    header_l.addWidget(title, 1)
+    collapse_btn = QToolButton(header)
+    collapse_btn.setObjectName("logCollapse")
+    collapse_btn.setText(UI.log_collapse_glyph_expanded)
+    collapse_btn.clicked.connect(on_toggle_collapsed)
+    collapse_btn.setAccessibleName(UI.log_toggle_accessible_name)
+    collapse_btn.setAccessibleDescription(UI.log_toggle_accessible_desc)
+    header_l.addWidget(collapse_btn, 0)
+    panel_l.addWidget(header)
 
     filter_edit = QLineEdit(wrap)
     filter_edit.setPlaceholderText(UI.log_filter_placeholder)
@@ -84,7 +101,15 @@ def build_log_panel(
     log_btns_l.addWidget(clear_btn)
     panel_l.addWidget(log_btns)
 
-    return LogPanel(widget=wrap, filter=filter_edit, view=view, pause_button=pause_btn, clear_button=clear_btn)
+    return LogPanel(
+        widget=wrap,
+        title=title,
+        filter=filter_edit,
+        view=view,
+        pause_button=pause_btn,
+        clear_button=clear_btn,
+        collapse_button=collapse_btn,
+    )
 
 
 @dataclass(frozen=True)
