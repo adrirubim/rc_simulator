@@ -165,7 +165,7 @@ Notes:
 - Requires WSL (and WSLg if you want to run the UI).
 - The shortcut launches `rc-simulator` inside the repo `.venv`.
 
-### 2. System dependencies (Ubuntu/Debian)
+### 3. System dependencies (Ubuntu/Debian)
 
 MOZA (Ubuntu/Debian):
 
@@ -190,13 +190,13 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]"
 ```
 
-### 4. Run
+### 4. Run (UI)
 
 ```bash
 rc-simulator
 ```
 
-Headless:
+### 5. Run (headless)
 
 ```bash
 # Run in headless mode (CLI)
