@@ -45,13 +45,11 @@ Use these commands from the **repository root** as your main entrypoints:
 | Command | Purpose | Notes |
 |--------|---------|-------|
 | `./scripts/dev-verify.sh` | **Full validation** (CI parity) | Creates venv if missing, installs deps, runs audit + ruff + pytest |
-| `rc-simulator` | **Run (UI mode)** | Qt/PySide6 app. Requires a GUI-capable environment (Linux desktop or WSLg). |
+| `./run.sh` | **Run (UI mode)** | Uses the repo-local `.venv` and launches `rc-simulator`. |
 | `rc-simulator-headless --help` | **Run (headless mode)** | Ops/systemd entrypoint: MOZA/UDP without Qt/PySide6. |
 | `python scripts/moza_udp_client.py` | **Compatibility shim** | Thin wrapper that launches UI mode without importing UI modules. |
-| `ops/linux/install.sh --all` | **One-command install (Linux/WSL)** | Installs launcher; installs systemd service if systemd is running |
+| `./install.sh` | **One-click install (Linux/WSL)** | Installs launcher; installs systemd service if systemd is running |
 | `install.bat` | **One-click install (Windows)** | Recommended. Creates a Desktop shortcut (“RC Simulator”) that launches via WSL and writes logs on failure |
-| `ops/windows/install_shortcut.cmd` | **Install desktop shortcut (Windows)** | Alternative. Same shortcut flow (useful if you don't want the root installer) |
-| `ops/linux/install_launcher.sh` | **Install desktop launcher** | Linux only (writes a `.desktop` entry) |
 
 ---
 
@@ -157,7 +155,7 @@ On Windows, the supported “double-click” experience is:
 
 - Double-click `install.bat`
   - Creates a WSL-local `.venv` (if missing)
-  - Installs the package editable (`pip install -e .`)
+  - Installs the package editable (via `scripts/bootstrap_venv.sh`)
   - Creates a Desktop shortcut named **RC Simulator** (with logs on failure)
 
 Notes:
@@ -181,22 +179,19 @@ sudo apt update
 sudo apt install -y python3-gi gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
 
-### 3. Python environment (venv)
+### 4. Linux one-click (repo root)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -e ".[dev]"
+./install.sh
 ```
 
-### 4. Run (UI)
+### 5. Run (Linux/WSL)
 
 ```bash
-rc-simulator
+./run.sh
 ```
 
-### 5. Run (headless)
+### 6. Run (headless)
 
 ```bash
 # Run in headless mode (CLI)
@@ -335,7 +330,7 @@ N/A. This repository does not ship optional tooling beyond `scripts/` and `ops/`
 <a id="project-status"></a>
 ## 📊 Project Status
 
-- **Current release:** **v0.1.0** — **In Development**
+- **Current release:** **v1.0.0** — **Gold Master (Stable)**
 - **Changelog:** see [CHANGELOG.md](CHANGELOG.md).
 - **Local quality gate:** `./scripts/dev-verify.sh` (CI parity).
 
@@ -408,5 +403,5 @@ MIT — See [LICENSE](LICENSE).
 
 ---
 
-**Last Updated:** April 2026 · **Status:** In Development 🚧 · **Version:** v0.1.0 · **Stack:** [VERSION_STACK.md](VERSION_STACK.md)
+**Last Updated:** April 2026 · **Status:** Gold Master ✅ · **Version:** v1.0.0 · **Stack:** [VERSION_STACK.md](VERSION_STACK.md)
 
